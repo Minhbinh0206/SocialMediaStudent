@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "988543292431",
+    "firebase_url": "https://nckh-38507-default-rtdb.firebaseio.com",
+    "project_id": "nckh-38507",
+    "storage_bucket": "nckh-38507.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:988543292431:android:3f9fc4e1127264dcf3bf7a",
+        "android_client_info": {
+          "package_name": "com.sociamediastudent"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_B5SzWxHRv7PxmB4Wak39rHIzHT4EQX0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
