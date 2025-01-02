@@ -7,6 +7,7 @@ import { RootStackParamList } from '../type'; // Đảm bảo import đúng Root
 import HeaderBack from '../components/HeaderBack';
 import ItemComment from '../components/ItemComment';
 import { TouchableWithoutFeedback } from 'react-native-gesture-handler';
+import { Chip } from 'react-native-paper';
 
 interface Post {
   postId: string;
@@ -24,6 +25,15 @@ interface Comment {
   content: string;
   commentCreateAt: string;
   commentLike: number;
+  onReplyPress: (username: string) => void;
+}
+
+interface Tag {
+  commentId: string;
+  userCommentId: string;
+  postId: string;
+  userReplyId: string;
+  userPostId: string;
 }
 
 const CommentScreen = () => {
@@ -37,6 +47,8 @@ const CommentScreen = () => {
   const [commentText, setCommentText] = useState('');
   const [likeCount, setLikeCount] = useState<number>(0);
   const currentUserId = getAuth().currentUser?.uid;
+  const [userNametag, setUserNameTag] = useState<string[]>([]);
+  const [tag, setTag] = useState<Tag | null>();
   const [commentCount, setCommentCount] = useState<number>(0);
 
   const [postDetails, setPostDetails] = useState<Post | null>(null);
@@ -69,7 +81,7 @@ const CommentScreen = () => {
     return () => {
       commentCountUnsubscribe(); // Hủy lắng nghe khi component unmount
     };
-  }, [userPostId, postId]); // Chạy lại khi `userPostId` hoặc `postId` thay đổi
+  }, [userPostId, postId]); // Chạy lại khi userPostId hoặc postId thay đổi
 
   // Cập nhật trạng thái thích theo thời gian thực
   useEffect(() => {
@@ -244,29 +256,97 @@ const CommentScreen = () => {
     return `${diffInDays} ngày trước`;
   };
 
+  const findStudentByUserIdReply = async (userId: string) => {
+    const db = getDatabase();
+    const studentsRef = ref(db, 'Students');
+    const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
+
+    try {
+      const snapshot = await get(studentQuery);
+
+      if (snapshot.exists()) {
+        const studentData = snapshot.val();
+        const studentId = Object.keys(studentData)[0];
+        setUserNameTag(studentData[studentId].studentName);
+      } else {
+        console.log('No student found with userId:', userId);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setLoading(false);
+    }
+  };
+  
   const handleComment = async () => {
     if (!commentText.trim()) return;
 
-    const db = getDatabase();
-    const commentRef = ref(db, `Comments/${userPostId}/${postId}`);
-    const newCommentRef = push(commentRef);
+    if (tag != null) {
+      // Xử lý khi có tag
+      const db = getDatabase();
+      const replyRef = ref(db, `Reply/Comments/${userPostId}/${postId}/${tag.userCommentId}/${tag.commentId}`);
+      const newReplyRef = push(replyRef);
+  
+      const replyData = {
+        userPostId: tag.userPostId || '',
+        postId: tag.postId || '',
+        userCommentId: tag.userCommentId || '',
+        commentId: tag.commentId || '',
+        content: commentText,
+        createdAt: new Date().toISOString(),
+        replyLike: 0,
+        replyId: newReplyRef.key || '',
+        userReplyId: currentUserId || '',
+      };
+  
+      await set(newReplyRef, replyData);
 
-    const commentData = {
-      userPostId: userPostId,
-      userCommentId: currentUserId || '',
-      commentId: newCommentRef.key || '',
-      content: commentText,
-      commentCreateAt: new Date().toISOString(),
-      commentLike: 0,
-    };
-
-    await set(newCommentRef, commentData);
+      setTag(null);
+    }
+    else {
+      const db = getDatabase();
+      const commentRef = ref(db, `Comments/${userPostId}/${postId}`);
+      const newCommentRef = push(commentRef);
+  
+      const commentData = {
+        userPostId: userPostId,
+        userCommentId: currentUserId || '',
+        commentId: newCommentRef.key || '',
+        content: commentText,
+        commentCreateAt: new Date().toISOString(),
+        commentLike: 0,
+      };
+  
+      await set(newCommentRef, commentData);
+    }
 
     setCommentText('');
     Keyboard.dismiss();
   };
 
   const { postImage, content, createdAt } = postDetails;
+
+  // Xử lý khi nhấn vào icon bình luận
+  const handleTagUser = (userTag: Tag) => {
+    if (userTag.userReplyId != '') {
+      findStudentByUserIdReply(userTag.userReplyId);
+    }
+    else{
+      findStudentByUserIdReply(userTag.userCommentId);
+    }
+
+    console.log('Clicked:', userNametag); // Kiểm tra log
+    if (tag == null) {
+      setTag(userTag); // Thêm tag nếu danh sách tag rỗng
+    } else {
+      setTag(userTag); // Cập nhật lại danh sách tag với một tag duy nhất
+    }
+  };  
+
+  const removeTag = () => {
+    setTag(null); // Xóa tag
+  };
+
 
   return (
     <View style={{ position: 'relative', height: '100%', paddingBottom: 100 }}>
@@ -317,11 +397,12 @@ const CommentScreen = () => {
                   userPostId={userPostId}
                   key={comment.commentId}
                   commentId={comment.commentId}
-                  createdAt={comment.commentCreateAt}
+                  commentCreateAt={comment.commentCreateAt}
                   commentLike={comment.commentLike}
                   userCommentId={comment.userCommentId}
                   content={comment.content}
                   postId={postId}
+                  onTagUser={handleTagUser}
                 />
               ))}
             </ScrollView>
@@ -338,19 +419,34 @@ const CommentScreen = () => {
             <View style={{ flex: 1 }}>
               {/* Phần comment dính dưới */}
               <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Viết bình luận..."
-                  value={commentText}
-                  onChangeText={onTextChange} />
-                <TouchableOpacity style={styles.sendButton} onPress={handleComment}>
-                  <Text style={styles.sendButtonText}>Gửi</Text>
-                </TouchableOpacity>
+                {/* Thẻ tag nằm trên phần nhập bình luận */}
+                <View style={styles.tagsContainer}>
+                  {tag &&
+                    <Chip onClose={() => removeTag()}>
+                      {userNametag}
+                    </Chip>
+                  }
+                </View>
+
+                {/* TextInput nằm dưới thẻ tag */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Viết bình luận..."
+                    value={commentText}
+                    onChangeText={onTextChange}
+                  />
+
+                  <TouchableOpacity style={styles.sendButton} onPress={handleComment}>
+                    <Text style={styles.sendButtonText}>Gửi</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </View>
+
     </View>
   );
 };
@@ -359,6 +455,17 @@ const styles = StyleSheet.create({
   container: {
     padding: 15,
     width: '100%',
+  },
+  inputContainer: {
+    padding: 10,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap', // Để các thẻ không bị tràn ra ngoài màn hình
+    marginBottom: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -437,19 +544,6 @@ const styles = StyleSheet.create({
   commentContent: {
     fontSize: 14,
     marginTop: 5,
-  },
-  inputContainer: {
-    position: 'absolute', // Giữ cố định
-    bottom: 0,            // Dính ở dưới màn hình
-    left: 0,              // Kéo về bên trái
-    right: 0,             // Kéo về bên phải
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderTopWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#fff', // Màu nền cho phần bình luận
-    height: 70,
   },
   input: {
     flex: 1,

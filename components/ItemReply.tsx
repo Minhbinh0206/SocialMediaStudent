@@ -5,69 +5,55 @@ import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
-import { FlatList } from 'react-native-gesture-handler';
-import ItemReply from './ItemReply';
 
-interface CommentProps {
+interface ReplyCommentProps {
+    replyId: string;
     userPostId: string;
     postId: string;
     commentId: string;
     userCommentId: string;
-    content: string;
-    commentCreateAt: string;
-    commentLike: number;
-    onTagUser: (userName: Tag) => void;
-}
-
-interface ReplyProps {
-    userPostId: string;
-    postId: string;
-    commentId: string;
-    userCommentMainId: string;
+    userReplyId: string;
     content: string;
     createdAt: string;
     replyLike: number;
-    replyId: string;
-    userReplyId: string;
+    onTagUser: (userName: Tag) => void;
 }
 
 interface Tag {
     commentId: string;
     userCommentId: string;
-    postId: string;
     userReplyId: string;
+    postId: string;
     userPostId: string;
 }
 
-const ItemComment: React.FC<CommentProps> = ({
+const ItemReply: React.FC<ReplyCommentProps> = ({
     postId,
+    replyId,
     commentId,
     userCommentId,
+    userReplyId,
     content,
-    commentCreateAt,
-    commentLike,
+    createdAt,
+    replyLike,
     userPostId,
     onTagUser,
 }) => {
     const [userName, setUserName] = useState<string>('');
-    const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [liked, setLiked] = useState<boolean>(false);
-    const [likeCount, setLikeCount] = useState<number>(commentLike);
+    const [likeCount, setLikeCount] = useState<number>(replyLike);
+    const [userNameReply, setUserNameReply] = useState<string>('');
     const currentUserId = getAuth().currentUser?.uid;
     const navigation = useNavigation<NavigationProp>();
-    const [replies, setReplies] = useState<ReplyProps[]>([]);
+    const [commentReplys, setCommentReplys] = useState<ReplyCommentProps[]>([]);
 
     type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
-
-    const handleShowUserName = () => {
-        setSelectedUserName(userName); // Lưu tên của người comment
-    };
 
     // Cập nhật trạng thái like cho bình luận theo thời gian thực
     useEffect(() => {
         const db = getDatabase();
-        const likeRef = ref(db, `Like/CommentLikes/${userPostId}/${postId}/${userCommentId}/${commentId}/${currentUserId}`);
+        const likeRef = ref(db, `Like/ReplyLikes/${userPostId}/${postId}/${userCommentId}/${commentId}/${userReplyId}/${replyId}/${currentUserId}`);
 
         // Lắng nghe thay đổi trạng thái like
         const unsubscribe = onValue(likeRef, (snapshot) => {
@@ -77,7 +63,7 @@ const ItemComment: React.FC<CommentProps> = ({
         });
 
         // Lắng nghe thay đổi số lượng like cho bình luận
-        const likeCountRef = ref(db, `Comments/${userPostId}/${postId}/${commentId}/commentLike`);
+        const likeCountRef = ref(db, `Reply/Comments/${userPostId}/${postId}/${userCommentId}/${commentId}/replyLike`);
         const likeCountUnsubscribe = onValue(likeCountRef, (snapshot) => {
             if (snapshot.exists()) {
                 setLikeCount(snapshot.val());  // Cập nhật số lượng like
@@ -91,69 +77,78 @@ const ItemComment: React.FC<CommentProps> = ({
         };
     }, [userCommentId, commentId, currentUserId]);
 
-    const fetchReplies = () => {
+    const fetchCommentReplys = async () => {
         const db = getDatabase();
-        const path = `Reply/Comments/${userPostId}/${postId}/${userCommentId}/${commentId}`;
+        const commentsRef = ref(db, `Reply/Comments/${userPostId}/${postId}/${userCommentId}/${commentId}`);
 
-        const repliesRef = ref(db, path);
+        try {
+            const snapshot = await get(commentsRef);
 
-        // Lắng nghe thay đổi theo thời gian thực
-        const unsubscribe = onValue(repliesRef, (snapshot) => {
             if (snapshot.exists()) {
-                const repliesData = snapshot.val();
-                const replyList = Object.keys(repliesData).map((replyId) => {
-                    const reply = repliesData[replyId];
-                    return {
-                        replyId: replyId,
-                        userReplyId: reply.userReplyId,
-                        content: reply.content,
-                        createdAt: reply.createdAt,
-                        replyLike: reply.replyLike,
-                        postId: reply.postId,
-                        userCommentMainId: reply.userCommentMainId,
-                        commentId: reply.commentId,
-                        userPostId: reply.userPostId,
-                    };
-                });
+                const commentsData = snapshot.val();
+                const commentList = Object.keys(commentsData).map(key => ({
+                    ...commentsData[key],
+                    replyId: key,
+                }));
 
-                console.log('Replies:', replyList);
-                setReplies(replyList); // Cập nhật state khi có thay đổi
+                // Fetch tên người dùng cho mỗi comment
+                const commentNames: { [userId: string]: string } = {};
+                for (const comment of commentList) {
+                    const userId = comment.userCommentId;
+                    const userRef = ref(db, `Students/${userId}`); // Giả sử bạn lưu tên người dùng ở đây
+
+                    const userSnapshot = await get(userRef);
+                    if (userSnapshot.exists()) {
+                        commentNames[userId] = userSnapshot.val().studentName;
+                    } else {
+                        commentNames[userId] = 'Unknown'; // Nếu không tìm thấy tên người dùng
+                    }
+                }
+
+                // Cập nhật tên người dùng cho mỗi comment
+                setCommentReplys(commentList);
             } else {
-                console.log('Không có phản hồi nào.');
-                setReplies([]); // Nếu không có phản hồi, đảm bảo state là mảng rỗng
+                console.log('Không có phản hồi nào cho' + snapshot.key);
             }
-        });
-
-        // Cleanup khi component unmount
-        return () => unsubscribe();
+        } catch (error) {
+            console.error('Lỗi khi lấy phản hồi:', error);
+        }
     };
 
-
     useEffect(() => {
-        fetchReplies();
+        fetchCommentReplys();
     }, [postId, userPostId]);
 
     const handlePress = async () => {
         const db = getDatabase();
-        const likeRef = ref(db, `Like/CommentLikes/${userPostId}/${postId}/${userCommentId}/${commentId}/${currentUserId}`);
-        const commentRef = ref(db, `Comments/${userPostId}/${postId}/${commentId}/commentLike`);
+        const likeRef = ref(db, `Like/ReplyLikes/${userPostId}/${postId}/${userCommentId}/${commentId}/${userReplyId}/${replyId}/${currentUserId}`);
+        const commentRef = ref(db, `Reply/Comments/${userPostId}/${postId}/${userCommentId}/${commentId}/${replyId}/replyLike`);
 
+        // Tính toán trước giá trị mới để cập nhật giao diện ngay lập tức
         const newLikeStatus = !liked;
-        setLiked(newLikeStatus);
         const newLikeCount = newLikeStatus ? likeCount + 1 : likeCount - 1;
 
+        // Cập nhật ngay trên giao diện
+        setLiked(newLikeStatus);
+        setLikeCount(newLikeCount);
+
         try {
+            // Gửi dữ liệu lên Firebase
             await set(likeRef, { liked: newLikeStatus });
-            await set(commentRef, newLikeCount); // Cập nhật lượt thích trong bình luận
+            await set(commentRef, newLikeCount);
         } catch (error) {
             console.error('Error updating like:', error);
+            // Khôi phục lại giá trị nếu có lỗi
+            setLiked(!newLikeStatus);
+            setLikeCount(likeCount);
         }
     };
 
     // Kiểm tra trạng thái like ban đầu cho bình luận
     const checkLikeStatus = async () => {
         const db = getDatabase();
-        const likeRef = ref(db, `Like/CommentLikes/${userPostId}/${postId}/${userCommentId}/${commentId}/${currentUserId}`);
+        const likeRef = ref(db, `Like/ReplyLikes/${userPostId}/${postId}/${userCommentId}/${commentId}/${userReplyId}/${replyId}/${currentUserId}`);
+
         try {
             const snapshot = await get(likeRef);
             if (snapshot.exists()) {
@@ -188,10 +183,34 @@ const ItemComment: React.FC<CommentProps> = ({
         }
     };
 
+    const findStudentByUserReplyId = async (userId: string) => {
+        const db = getDatabase();
+        const studentsRef = ref(db, 'Students');
+        const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
+
+        try {
+            const snapshot = await get(studentQuery);
+
+            if (snapshot.exists()) {
+                const studentData = snapshot.val();
+                const studentId = Object.keys(studentData)[0];
+                setUserNameReply(studentData[studentId].studentName);
+                setLoading(false);
+            } else {
+                console.log('No student found with userId:', userId);
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        findStudentByUserId(userCommentId);
+        findStudentByUserId(userReplyId);
+        findStudentByUserReplyId(userCommentId);
         checkLikeStatus();
-    }, [userCommentId]);
+    }, [userReplyId]);
 
     const iconPaths = {
         like: require('../icons/icon_like.png'),
@@ -220,7 +239,8 @@ const ItemComment: React.FC<CommentProps> = ({
     };
 
     return (
-        <View>
+        <View style={{ marginLeft: 50 }}>
+            {/* <Text style={{ fontSize: 16, marginLeft: 50 }}>Phản hồi bình luận của {userNameReply}</Text> */}
             <View style={{ flexDirection: 'row' }}>
                 <Image
                     source={{ uri: 'https://tse3.mm.bing.net/th?id=OIP.gYaUpJvv-3E-stUjZ-Pd2AHaHa&pid=Api&P=0&h=180' }}
@@ -230,7 +250,7 @@ const ItemComment: React.FC<CommentProps> = ({
                     <View style={styles.header}>
                         <View style={styles.userInfo}>
                             <Text style={styles.userName}>{loading ? 'Đang tải...' : userName}</Text>
-                            <Text style={styles.commentDate}>{formatDate(commentCreateAt)}</Text>
+                            <Text style={styles.commentDate}>{formatDate(createdAt)}</Text>
                         </View>
                     </View>
 
@@ -241,37 +261,12 @@ const ItemComment: React.FC<CommentProps> = ({
                             <Image source={liked ? iconPaths.like_active : iconPaths.like} style={styles.icon} />
                             <Text style={styles.actionText}>{likeCount}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionButton} onPress={() => onTagUser({ commentId, userCommentId, postId, userPostId, userReplyId: '' })}>
+                        <TouchableOpacity style={styles.actionButton} onPress={() => onTagUser({ commentId, userCommentId , postId, userPostId, userReplyId })}>
                             <Image source={iconPaths.comment} style={styles.icon} />
-                            <Text style={styles.actionText}>{replies.length}</Text>
+                            <Text style={styles.actionText}>{replyLike}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
-            </View>
-            {selectedUserName && (
-                <Text style={styles.tagUserName}>
-                    @{selectedUserName}
-                </Text>
-            )}
-
-            <View>
-                <ScrollView>
-                    {replies.map((reply) => (
-                        <ItemReply
-                            replyId={reply.replyId}
-                            userReplyId={reply.userReplyId}
-                            userPostId={userPostId}
-                            key={reply.replyId}
-                            commentId={commentId}
-                            createdAt={reply.createdAt}
-                            replyLike={reply.replyLike}
-                            userCommentId={userCommentId}
-                            content={reply.content}
-                            postId={postId}
-                            onTagUser={onTagUser}
-                        />
-                    ))}
-                </ScrollView>
             </View>
         </View>
     );
@@ -279,7 +274,7 @@ const ItemComment: React.FC<CommentProps> = ({
 
 const styles = StyleSheet.create({
     commentCard: {
-        width: '87%',
+        width: '85%',
         padding: 15,
         marginBottom: 20,
         backgroundColor: '#fff',
@@ -289,13 +284,6 @@ const styles = StyleSheet.create({
     },
     actionText: {
         fontSize: 14,
-    },
-    tagUserName: {
-        fontSize: 14,
-        color: '#007BFF',
-        fontWeight: 'bold',
-        marginTop: 5,
-        marginLeft: 15,
     },
     commentContent: {
         fontSize: 16,
@@ -341,4 +329,5 @@ const styles = StyleSheet.create({
     },
 });
 
-export default ItemComment;
+export default ItemReply;
+
