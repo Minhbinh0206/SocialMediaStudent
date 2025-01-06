@@ -5,6 +5,7 @@ import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
+import { ActivityIndicator } from 'react-native-paper';
 
 interface PostProps {
   postId: string;
@@ -23,29 +24,29 @@ const ItemPost: React.FC<PostProps> = ({
   postImage,
   postLike,
 }) => {
-  const [userName, setUserName] = useState<string>(''); 
+  const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
-  const [avatar, setAvatar] = useState<string>(''); 
-  const [liked, setLiked] = useState<boolean>(false); 
+  const [avatar, setAvatar] = useState<string>('');
+  const [liked, setLiked] = useState<boolean>(false);
   const [likeCount, setLikeCount] = useState<number>(postLike);
   const [commentCount, setCommentCount] = useState<number>(0);
   const currentUserId = getAuth().currentUser?.uid;
   const navigation = useNavigation<NavigationProp>();
 
-  type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+  type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Default'>;
 
   // Cập nhật trạng thái thích theo thời gian thực
   useEffect(() => {
     const db = getDatabase();
     const likeRef = ref(db, `Like/PostLikes/${userPostId}/${postId}/${currentUserId}`);
-    
+
     // Lắng nghe thay đổi trạng thái like
     const unsubscribe = onValue(likeRef, (snapshot) => {
       if (snapshot.exists()) {
         setLiked(snapshot.val().liked);  // Cập nhật trạng thái liked
       }
     });
-  
+
     // Lắng nghe thay đổi số lượng like
     const likeCountRef = ref(db, `Posts/${userPostId}/${postId}/postLike`);
     const likeCountUnsubscribe = onValue(likeCountRef, (snapshot) => {
@@ -53,7 +54,7 @@ const ItemPost: React.FC<PostProps> = ({
         setLikeCount(snapshot.val());  // Cập nhật số lượng like
       }
     });
-  
+
     // Cleanup khi component unmount
     return () => {
       unsubscribe();
@@ -65,7 +66,7 @@ const ItemPost: React.FC<PostProps> = ({
     const db = getDatabase();
     // Lắng nghe sự thay đổi trong các bình luận của bài đăng
     const commentRef = ref(db, `Comments/${userPostId}/${postId}`);
-    
+
     // Lắng nghe khi có thay đổi trong các bình luận
     const commentCountUnsubscribe = onValue(commentRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -76,12 +77,12 @@ const ItemPost: React.FC<PostProps> = ({
         setCommentCount(0); // Nếu không có bình luận
       }
     });
-  
+
     // Cleanup khi component unmount
     return () => {
       commentCountUnsubscribe();
     };
-  }, [userPostId, postId]);  
+  }, [userPostId, postId]);
 
   const handlePress = async () => {
     const db = getDatabase();
@@ -117,7 +118,7 @@ const ItemPost: React.FC<PostProps> = ({
 
   const handleComment = () => {
     navigation.navigate('CommentScreen', { postId, userPostId });
-  };  
+  };
 
   const findStudentByUserId = async (userId: string) => {
     const db = getDatabase();
@@ -169,6 +170,14 @@ const ItemPost: React.FC<PostProps> = ({
     return `${diffInDays} ngày trước`;
   };
 
+  if (loading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.postCard}>
       <View style={styles.header}>
@@ -177,7 +186,7 @@ const ItemPost: React.FC<PostProps> = ({
           style={styles.avatar}
         />
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{loading ? 'Đang tải...' : userName}</Text>
+          <Text style={styles.userName}>{userName}</Text>
           <Text style={styles.postDate}>{formatDate(createdAt)}</Text>
         </View>
 
@@ -209,6 +218,12 @@ const ItemPost: React.FC<PostProps> = ({
 };
 
 const styles = StyleSheet.create({
+  loaderContainer: {
+    flex: 1,
+    height: 700,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   postCard: {
     padding: 15,
     marginBottom: 20,

@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { getAuth } from 'firebase/auth'; // Firebase Auth
 import { getDatabase, ref, get } from 'firebase/database'; // Firebase Realtime Database
+import { NavigationProp, useNavigation } from '@react-navigation/native'; // Import useNavigation
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../type';
 
 // Giả sử kiểu dữ liệu Student
 type Student = {
@@ -18,10 +21,13 @@ type HomeHeaderProps = {
 };
 
 const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
+  type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Default'>;
+
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [messageCount, setMessageCount] = useState<number>(5); // Giả lập số tin nhắn
   const [userName, setUserName] = useState<string | null>(null);
   const [gender, setGender] = useState<string | null>(null);
+  const navigation = useNavigation<NavigationProp>();
 
   useEffect(() => {
     // Lấy UID của người dùng từ Firebase Authentication
@@ -70,7 +76,7 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
         );
       case 'friend': // Trang bạn bè
         return (
-          <TouchableOpacity>
+          <TouchableOpacity onPress={handleSearch}>
             <Image
               source={require('../icons/icon_search.png')}
               style={styles.iconImage}
@@ -113,6 +119,10 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
     }
     return require('../images/avatar_choose_default.jpg'); // Avatar mặc định nếu không có giới tính
   };
+
+  const handleSearch = () => {
+    navigation.navigate('SearchFriend');
+  }
 
   return (
     <View style={styles.headerContainer}>

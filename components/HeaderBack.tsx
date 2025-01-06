@@ -2,12 +2,7 @@ import React from 'react';
 import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native'; // Import useNavigation
 
-type HomeHeaderProps = {
-    title: string;
-    pageName: string; // Nhận thêm prop để xác định trang
-};
-
-const HeaderBack: React.FC<HomeHeaderProps> = () => {
+const HeaderBack = () => {
 
     const navigation = useNavigation(); // Khai báo useNavigation
 

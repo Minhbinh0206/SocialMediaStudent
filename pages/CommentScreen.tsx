@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   commentsSection: {
-
+    marginBottom: 20
   },
   commentTitle: {
     fontSize: 20,

@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 import { FlatList } from 'react-native-gesture-handler';
 import ItemReply from './ItemReply';
+import { Avatar } from 'react-native-paper';
 
 interface CommentProps {
     userPostId: string;
@@ -50,6 +51,7 @@ const ItemComment: React.FC<CommentProps> = ({
     onTagUser,
 }) => {
     const [userName, setUserName] = useState<string>('');
+    const [userAvatar, setUserAvatar] = useState<string>('');
     const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [liked, setLiked] = useState<boolean>(false);
@@ -57,6 +59,7 @@ const ItemComment: React.FC<CommentProps> = ({
     const currentUserId = getAuth().currentUser?.uid;
     const navigation = useNavigation<NavigationProp>();
     const [replies, setReplies] = useState<ReplyProps[]>([]);
+    const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
     type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -164,6 +167,10 @@ const ItemComment: React.FC<CommentProps> = ({
         }
     };
 
+    const handleExpand = () => {
+        setIsExpanded(!isExpanded);
+    };
+
     // Lấy thông tin người dùng từ userCommentId
     const findStudentByUserId = async (userId: string) => {
         const db = getDatabase();
@@ -177,6 +184,7 @@ const ItemComment: React.FC<CommentProps> = ({
                 const studentData = snapshot.val();
                 const studentId = Object.keys(studentData)[0];
                 setUserName(studentData[studentId].studentName);
+                setUserAvatar(studentData[studentId].avatar)
                 setLoading(false);
             } else {
                 console.log('No student found with userId:', userId);
@@ -223,7 +231,7 @@ const ItemComment: React.FC<CommentProps> = ({
         <View>
             <View style={{ flexDirection: 'row' }}>
                 <Image
-                    source={{ uri: 'https://tse3.mm.bing.net/th?id=OIP.gYaUpJvv-3E-stUjZ-Pd2AHaHa&pid=Api&P=0&h=180' }}
+                    source={{ uri: userAvatar }}
                     style={styles.avatar}
                 />
                 <View style={styles.commentCard}>
@@ -248,6 +256,7 @@ const ItemComment: React.FC<CommentProps> = ({
                     </View>
                 </View>
             </View>
+
             {selectedUserName && (
                 <Text style={styles.tagUserName}>
                     @{selectedUserName}
@@ -255,23 +264,27 @@ const ItemComment: React.FC<CommentProps> = ({
             )}
 
             <View>
-                <ScrollView>
-                    {replies.map((reply) => (
-                        <ItemReply
-                            replyId={reply.replyId}
-                            userReplyId={reply.userReplyId}
-                            userPostId={userPostId}
-                            key={reply.replyId}
-                            commentId={commentId}
-                            createdAt={reply.createdAt}
-                            replyLike={reply.replyLike}
-                            userCommentId={userCommentId}
-                            content={reply.content}
-                            postId={postId}
-                            onTagUser={onTagUser}
-                        />
-                    ))}
-                </ScrollView>
+                <TouchableOpacity onPress={handleExpand}>
+                    {!isExpanded && replies.length > 0 && <Text style={styles.textExpand}> Hiển thị thêm {replies.length} phản hồi...</Text>}
+                    {isExpanded && <Text style={styles.textExpand}> Thu gọn</Text>}
+                </TouchableOpacity>
+                {isExpanded && <ScrollView>
+                        {replies.map((reply) => (
+                            <ItemReply
+                                replyId={reply.replyId}
+                                userReplyId={reply.userReplyId}
+                                userPostId={userPostId}
+                                key={reply.replyId}
+                                commentId={commentId}
+                                createdAt={reply.createdAt}
+                                replyLike={reply.replyLike}
+                                userCommentId={userCommentId}
+                                content={reply.content}
+                                postId={postId}
+                                onTagUser={onTagUser}
+                            />
+                        ))}
+                    </ScrollView>}
             </View>
         </View>
     );
@@ -281,7 +294,7 @@ const styles = StyleSheet.create({
     commentCard: {
         width: '87%',
         padding: 15,
-        marginBottom: 20,
+        marginTop: 15,
         backgroundColor: '#fff',
         borderRadius: 15,
         borderWidth: 1,
@@ -304,6 +317,11 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    textExpand: {
+        fontSize: 13,
+        marginLeft: 50,
+        marginVertical: 10
     },
     avatar: {
         width: 40,

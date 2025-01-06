@@ -4,6 +4,8 @@ import Header from '../components/Header';
 import Navigation from '../components/Navigation';
 import ListEvent from '../components/ListEvent';
 import ListPost from '../components/ListPost';
+import ListFriend from '../components/ListFriend'; // Import ListFriend component
+import Profile from '../components/Profile';
 
 const Home: React.FC = () => {
     const [title, setTitle] = useState('Trang chủ');
@@ -18,8 +20,16 @@ const Home: React.FC = () => {
     const renderItem = ({ item }: { item: any }) => {
         return (
             <View style={styles.listItem}>
-                <ListEvent />
-                <ListPost />
+                {pageName === 'friend' ? (
+                    <ListFriend />
+                ) : pageName === 'profile' ? (
+                    <Profile />
+                ) : (
+                    <>
+                        <ListEvent />
+                        <ListPost />
+                    </>
+                )}
             </View>
         );
     };
@@ -32,7 +42,7 @@ const Home: React.FC = () => {
             <FlatList
                 data={['item1']}
                 keyExtractor={(item, index) => index.toString()}
-                renderItem={renderItem}  
+                renderItem={renderItem}
             />
 
             <Navigation onIconPress={handleIconPress} />

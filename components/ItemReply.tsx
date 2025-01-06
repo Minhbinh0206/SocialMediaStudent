@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { getDatabase, ref, onValue, set, get, query, orderByChild, equalTo } from 'firebase/database';
+import { getDatabase, ref, onValue, set, get, query, orderByChild, equalTo, runTransaction } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -40,6 +40,7 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
     onTagUser,
 }) => {
     const [userName, setUserName] = useState<string>('');
+    const [userAvatar, setUserAvatar] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(true);
     const [liked, setLiked] = useState<boolean>(false);
     const [likeCount, setLikeCount] = useState<number>(replyLike);
@@ -135,7 +136,11 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
         try {
             // Gửi dữ liệu lên Firebase
             await set(likeRef, { liked: newLikeStatus });
-            await set(commentRef, newLikeCount);
+
+            // Sử dụng transaction để đảm bảo tính nhất quán khi cập nhật số lượng like
+            await runTransaction(commentRef, (currentLikeCount: number) => {
+                return newLikeStatus ? (currentLikeCount || 0) + 1 : (currentLikeCount || 0) - 1;
+            });
         } catch (error) {
             console.error('Error updating like:', error);
             // Khôi phục lại giá trị nếu có lỗi
@@ -172,6 +177,7 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
                 const studentData = snapshot.val();
                 const studentId = Object.keys(studentData)[0];
                 setUserName(studentData[studentId].studentName);
+                setUserAvatar(studentData[studentId].avatar)
                 setLoading(false);
             } else {
                 console.log('No student found with userId:', userId);
@@ -243,7 +249,7 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
             {/* <Text style={{ fontSize: 16, marginLeft: 50 }}>Phản hồi bình luận của {userNameReply}</Text> */}
             <View style={{ flexDirection: 'row' }}>
                 <Image
-                    source={{ uri: 'https://tse3.mm.bing.net/th?id=OIP.gYaUpJvv-3E-stUjZ-Pd2AHaHa&pid=Api&P=0&h=180' }}
+                    source={{ uri: userAvatar }}
                     style={styles.avatar}
                 />
                 <View style={styles.commentCard}>
@@ -259,11 +265,11 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
                     <View style={styles.footer}>
                         <TouchableOpacity style={styles.actionButton} onPress={handlePress}>
                             <Image source={liked ? iconPaths.like_active : iconPaths.like} style={styles.icon} />
-                            <Text style={styles.actionText}>{likeCount}</Text>
+                            <Text style={styles.actionText}>{replyLike}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.actionButton} onPress={() => onTagUser({ commentId, userCommentId , postId, userPostId, userReplyId })}>
                             <Image source={iconPaths.comment} style={styles.icon} />
-                            <Text style={styles.actionText}>{replyLike}</Text>
+                            <Text style={styles.actionText}>0</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

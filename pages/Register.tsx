@@ -1,6 +1,6 @@
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { auth, database } from '../firebaseConfig';
 import { ref, set } from 'firebase/database';
@@ -54,7 +54,7 @@ const SignUp: React.FC = () => {
         studentNumber: mssv,
         email: email,
         password: password,
-        roleId: 5,
+        userId: getAuth().currentUser?.uid
       });
   
       navigation.navigate('UploadProfile', { userId: user.uid });
