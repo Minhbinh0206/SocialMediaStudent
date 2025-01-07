@@ -4,37 +4,43 @@ import { database } from '../firebaseConfig';
 import { ref, onValue } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import ItemFriend from './ItemFriend';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../type';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
+
 const ListFriend: React.FC = () => {
     const [myFriends, setMyFriends] = useState<any[]>([]);
-    const [suggestedFriends, setSuggestedFriends] = useState<any[]>([]); // Danh sách gợi ý kết bạn
+    const [suggestedFriends, setSuggestedFriends] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedTab, setSelectedTab] = useState('suggestions'); // Đặt mặc định là "Gợi ý kết bạn"
+    const [selectedTab, setSelectedTab] = useState('suggestions');
+    const [showPopup, setShowPopup] = useState(false);  // Trạng thái popup
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');  // Trạng thái sắp xếp
 
     const currentUserId = getAuth().currentUser?.uid;
+    const navigation = useNavigation<NavigationProp>();
 
     useEffect(() => {
         if (currentUserId) {
             const fetchFriends = async () => {
                 const friendsRef = ref(database, `Friends/${currentUserId}`);
-                const friends: any[] = [];
-
-                // Lấy danh sách bạn bè từ Firebase
+                
                 onValue(friendsRef, (snapshot) => {
+                    const friends: any[] = [];
+            
                     snapshot.forEach((childSnapshot) => {
                         const friendId = childSnapshot.key;
                         const status = childSnapshot.val().status;
-
+            
                         friends.push({ friendId, status });
                     });
-
+            
                     fetchFriendDetails(friends);
-                }, {
-                    onlyOnce: true
                 });
-            };
+            };            
 
             const fetchFriendDetails = async (friends: any[]) => {
                 const friendsWithDetails: any[] = [];
@@ -51,7 +57,6 @@ const ListFriend: React.FC = () => {
                                     name: friendData.studentName,
                                 });
 
-                                // Tìm bạn của bạn
                                 fetchFriendSuggestions(friend.friendId, suggestions);
                             }
                             resolve(null);
@@ -70,13 +75,12 @@ const ListFriend: React.FC = () => {
 
             const fetchFriendSuggestions = (friendId: string, suggestions: any[]) => {
                 const friendsOfFriendRef = ref(database, `Friends/${friendId}`);
-
+            
                 onValue(friendsOfFriendRef, (snapshot) => {
                     snapshot.forEach((childSnapshot) => {
                         const suggestedFriendId = childSnapshot.key;
                         const status = childSnapshot.val().status;
-
-                        // Kiểm tra nếu không phải bạn của tôi và status = 3 (là bạn bè)
+            
                         if (
                             suggestedFriendId !== currentUserId &&
                             !myFriends.some((friend) => friend.friendId === suggestedFriendId) &&
@@ -86,8 +90,7 @@ const ListFriend: React.FC = () => {
                             onValue(suggestedFriendRef, (snapshot) => {
                                 if (snapshot.exists()) {
                                     const suggestedFriendData = snapshot.val();
-
-                                    // Tránh trùng lặp
+            
                                     if (!suggestions.some((s) => s.friendId === suggestedFriendId)) {
                                         suggestions.push({
                                             friendId: suggestedFriendId,
@@ -95,24 +98,39 @@ const ListFriend: React.FC = () => {
                                         });
                                     }
                                 }
-                            }, { onlyOnce: true });
+                            });
                         }
                     });
-                }, { onlyOnce: true });
+            
+                    setSuggestedFriends(suggestions);
+                });
             };
 
             fetchFriends();
         }
     }, [currentUserId]);
 
-    // Lọc danh sách theo tab
     const filteredFriends = selectedTab === 'friends'
         ? myFriends.filter(friend => friend.status === 3)
         : selectedTab === 'requests'
             ? myFriends.filter(friend => friend.status === 2)
             : selectedTab === 'sent'
                 ? myFriends.filter(friend => friend.status === 1)
-                : suggestedFriends; // Tab Gợi ý kết bạn
+                : suggestedFriends;
+
+    // Hàm sắp xếp theo chữ cái đầu tiên của tên
+    const sortFriends = (friends: any[]) => {
+        return friends.sort((a, b) => {
+            const nameA = a.name[0].toUpperCase();
+            const nameB = b.name[0].toUpperCase();
+            
+            if (sortOrder === 'asc') {
+                return nameA < nameB ? -1 : 1;
+            } else {
+                return nameA > nameB ? -1 : 1;
+            }
+        });
+    };
 
     if (loading) {
         return (
@@ -122,9 +140,10 @@ const ListFriend: React.FC = () => {
         );
     }
 
+    const sortedFriends = sortFriends(filteredFriends);  // Sắp xếp danh sách bạn bè theo lựa chọn
+
     return (
         <View>
-            {/* Tab lựa chọn */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.tabContainer}>
                     <TouchableOpacity
@@ -153,7 +172,6 @@ const ListFriend: React.FC = () => {
                 </View>
             </ScrollView>
 
-            {/* Tiêu đề động */}
             <View style={{ flexDirection: 'row', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: 10 }}>
                 <Text style={{ fontSize: 24, fontWeight: 'bold' }}>
                     {selectedTab === 'friends' && 'Danh sách'}
@@ -161,22 +179,40 @@ const ListFriend: React.FC = () => {
                     {selectedTab === 'sent' && 'Lời mời đã gửi'}
                     {selectedTab === 'suggestions' && 'Gợi ý kết bạn'}
                 </Text>
-                <TouchableOpacity onPress={() => console.log('Filter clicked')}>
+                <TouchableOpacity onPress={() => setShowPopup(!showPopup)}>
                     <Image source={require('../icons/icon_filter.png')} style={styles.icon} />
                 </TouchableOpacity>
             </View>
 
-            {/* Danh sách bạn bè */}
-            <FlatList
-                data={filteredFriends}
-                keyExtractor={(item) => item.friendId}
-                renderItem={({ item }) => (
-                    <ItemFriend
-                        id={item.friendId}
-                        onAddFriend={() => console.log("Clicked")}
-                    />
-                )}
-            />
+            {/* Popup sắp xếp */}
+            {showPopup && (
+                <View style={styles.popup}>
+                    <TouchableOpacity onPress={() => { setSortOrder('asc'); setShowPopup(false); }}>
+                        <Text style={styles.popupText}>Theo chữ cái từ A - Z</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => { setSortOrder('desc'); setShowPopup(false); }}>
+                        <Text style={styles.popupText}>Theo chữ cái từ Z - A</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Kiểm tra nếu danh sách rỗng */}
+            {sortedFriends.length === 0 ? (
+                <View style={styles.emptyListContainer}>
+                    <Text style={styles.emptyListText}>Danh sách rỗng</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={sortedFriends}
+                    keyExtractor={(item) => item.friendId}
+                    renderItem={({ item }) => (
+                        <ItemFriend
+                            id={item.friendId}
+                            onCheckFriend={(() => navigation.navigate('Friend', { userId: item.friendId }))}
+                        />
+                    )}
+                />
+            )}
         </View>
     );
 };
@@ -214,7 +250,42 @@ const styles = StyleSheet.create({
     },
     activeText: {
         color: 'white',
-    }
+    },
+    popup: {
+        position: 'absolute',
+        top: 85,
+        right: 10,
+        backgroundColor: 'white',
+        borderRadius: 8,
+        shadowColor: 'black',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        padding: 10,
+        width: 135,
+        zIndex: 10,
+    },
+    popupText: {
+        fontSize: 16,
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e2e5e9',
+    },
+    emptyListContainer: {
+        height: 500,
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    emptyListText: {
+        fontSize: 18,
+        color: '#999',
+        fontWeight: 'bold',
+        fontStyle: 'italic',
+        textAlign: 'center',
+    },
 });
 
 export default ListFriend;

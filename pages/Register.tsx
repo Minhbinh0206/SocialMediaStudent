@@ -48,6 +48,7 @@ const SignUp: React.FC = () => {
         departmentId: '',
         majorId: '',
         isOnline: false,
+        description: '',
         birthday: '',
         gender: '',
         studentName: '',

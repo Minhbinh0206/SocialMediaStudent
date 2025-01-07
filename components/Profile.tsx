@@ -7,7 +7,10 @@ import database from '@react-native-firebase/database';
 const Profile = () => {
     const [userData, setUserData] = useState<any>(null); // Lưu trữ dữ liệu người dùng
     const [loading, setLoading] = useState(true); // Trạng thái tải dữ liệu
-    const navigation = useNavigation();
+    const currentUserId = getAuth().currentUser?.uid
+    const [countFriends, setCountFriends] = useState(0);
+    const [countFollowings, setCountFollowings] = useState(0);
+    const [countFollowers, setCountFollowers] = useState(0);
 
     // Lấy CurrentUserId từ Firebase Auth và thông tin người dùng từ Firebase Database
     useEffect(() => {
@@ -37,6 +40,49 @@ const Profile = () => {
         fetchUserData();
     }, []);
 
+    // Lấy thông tin các số lượng
+    useEffect(() => {
+        const countNumber = () => {
+            if (currentUserId) {
+                const yourRef = database().ref(`Friends/${currentUserId}`);
+
+                yourRef.on('value', (yourSnapshot) => {
+                    let countFollowers = 0;
+                    let countFollowings = 0;
+                    let countFriends = 0;
+
+                    if (yourSnapshot.exists()) {
+                        const data = yourSnapshot.val();
+
+                        // Lặp qua tất cả trạng thái của người dùng
+                        Object.values(data).forEach((item: any) => {
+                            if (item.status === 1) {
+                                countFollowings++; // Đang theo dõi
+                            } else if (item.status === 2) {
+                                countFollowers++; // Người theo dõi
+                            } else if (item.status === 3) {
+                                countFriends++; // Bạn bè
+                            }
+                        });
+                    }
+
+                    // Set state cho từng trạng thái
+                    setCountFollowings(countFollowings);
+                    setCountFollowers(countFollowers);
+                    setCountFriends(countFriends);
+                });
+            }
+        };
+
+        countNumber();
+
+        // Cleanup listener
+        return () => {
+            const yourRef = database().ref(`Friends/${currentUserId}`);
+            yourRef.off();
+        };
+    }, [currentUserId]);
+
     if (loading) {
         return (
             <View style={styles.container}>
@@ -62,15 +108,15 @@ const Profile = () => {
             </View>
             <View style={styles.statsContainer}>
                 <View style={styles.stat}>
-                    <Text style={styles.statNumber}>{userData.postsCount || 0}</Text>
+                    <Text style={styles.statNumber}>{countFriends}</Text>
                     <Text style={styles.statLabel}>Friends</Text>
                 </View>
                 <View style={styles.stat}>
-                    <Text style={styles.statNumber}>{userData.followersCount || 0}</Text>
+                    <Text style={styles.statNumber}>{countFollowers}</Text>
                     <Text style={styles.statLabel}>Followers</Text>
                 </View>
                 <View style={styles.stat}>
-                    <Text style={styles.statNumber}>{userData.followingCount || 0}</Text>
+                    <Text style={styles.statNumber}>{countFollowings}</Text>
                     <Text style={styles.statLabel}>Following</Text>
                 </View>
             </View>
