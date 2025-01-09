@@ -8,5 +8,6 @@ export type RootStackParamList = {
     CommentScreen: { postId: string, userPostId: string };
     SearchFriend: undefined; 
     Friend: { userId: string };
+    NotifyDetail: { idAnnouncer: string; id: string };
   };
   

@@ -6,6 +6,7 @@ import ListEvent from '../components/ListEvent';
 import ListPost from '../components/ListPost';
 import ListFriend from '../components/ListFriend'; // Import ListFriend component
 import Profile from '../components/Profile';
+import ListNotify from '../components/ListNotify';
 
 const Home: React.FC = () => {
     const [title, setTitle] = useState('Trang chủ');
@@ -22,6 +23,8 @@ const Home: React.FC = () => {
             <View style={styles.listItem}>
                 {pageName === 'friend' ? (
                     <ListFriend />
+                ) : pageName === 'notification' ? (
+                    <ListNotify />
                 ) : pageName === 'profile' ? (
                     <Profile />
                 ) : (

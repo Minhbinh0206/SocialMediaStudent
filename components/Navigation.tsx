@@ -7,7 +7,7 @@ type Props = {
 
 const Navigation: React.FC<Props> = ({ onIconPress }) => {
     const [activeIcon, setActiveIcon] = useState<string>('home');
-    const notificationCount = 5;
+    const notificationCount = 0;
 
     const iconPaths = {
         home: require('../icons/icon_home.png'),

@@ -1,13 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native'; // Import useNavigation
 
 const HeaderBack = () => {
-
     const navigation = useNavigation(); // Khai báo useNavigation
+    const [isPressing, setIsPressing] = useState(false); // Trạng thái nhấn nút
 
     const handleBackPress = () => {
-        navigation.goBack(); // Quay lại trang trước đó
+        if (!isPressing) {
+            setIsPressing(true);
+            navigation.goBack();
+
+            // Đặt lại trạng thái sau một khoảng thời gian để ngừng nhấn liên tục
+            setTimeout(() => {
+                setIsPressing(false);
+            }, 500); // 500ms là khoảng thời gian cho phép nhấn lại
+        }
     };
 
     return (

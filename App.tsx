@@ -16,6 +16,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import CommentScreen from './pages/CommentScreen';
 import SearchFriend from './pages/SearchFriend';
 import Friend from './pages/Friend';
+import NotifyDetail from './pages/NotifyDetail';
 
 const Stack = createStackNavigator();
 
@@ -29,8 +30,9 @@ function App(): React.JSX.Element {
         <Stack.Screen name="Home" component={Home} options={{ headerShown: false }} />
         <Stack.Screen name="UploadProfile" component={UploadProfile} options={{ headerShown: false }} />
         <Stack.Screen name="SearchFriend" component={SearchFriend} options={{ headerShown: false }} />
-        <Stack.Screen name="CommentScreen" component={CommentScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Friend" component={Friend} options={{ headerShown: false }} />
+        <Stack.Screen name="CommentScreen" component={CommentScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="NotifyDetail" component={NotifyDetail} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Friend'>;
 
 const ListFriend: React.FC = () => {
     const [myFriends, setMyFriends] = useState<any[]>([]);
@@ -19,6 +19,7 @@ const ListFriend: React.FC = () => {
     const [selectedTab, setSelectedTab] = useState('suggestions');
     const [showPopup, setShowPopup] = useState(false);  // Trạng thái popup
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');  // Trạng thái sắp xếp
+    const [loadingTabChange, setLoadingTabChange] = useState(false);  // Trạng thái loading khi chuyển tab
 
     const currentUserId = getAuth().currentUser?.uid;
     const navigation = useNavigation<NavigationProp>();
@@ -142,31 +143,39 @@ const ListFriend: React.FC = () => {
 
     const sortedFriends = sortFriends(filteredFriends);  // Sắp xếp danh sách bạn bè theo lựa chọn
 
+    const handleTabChange = (tab: string) => {
+        setLoadingTabChange(true);
+        setTimeout(() => {
+            setSelectedTab(tab);
+            setLoadingTabChange(false);
+        }, 400); // Để các trạng thái loading cập nhật đồng thời
+    };
+
     return (
         <View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.tabContainer}>
                     <TouchableOpacity
                         style={[styles.button, selectedTab === 'suggestions' && styles.activeButton]}
-                        onPress={() => setSelectedTab('suggestions')}>
+                        onPress={() => handleTabChange('suggestions')}>
                         <Text style={[styles.buttonText, selectedTab === 'suggestions' && styles.activeText]}>Gợi ý kết bạn</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[styles.button, selectedTab === 'requests' && styles.activeButton]}
-                        onPress={() => setSelectedTab('requests')}>
+                        onPress={() => handleTabChange('requests')}>
                         <Text style={[styles.buttonText, selectedTab === 'requests' && styles.activeText]}>Lời mời kết bạn</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[styles.button, selectedTab === 'sent' && styles.activeButton]}
-                        onPress={() => setSelectedTab('sent')}>
+                        onPress={() => handleTabChange('sent')}>
                         <Text style={[styles.buttonText, selectedTab === 'sent' && styles.activeText]}>Lời mời đã gửi</Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity
                         style={[styles.button, selectedTab === 'friends' && styles.activeButton]}
-                        onPress={() => setSelectedTab('friends')}>
+                        onPress={() => handleTabChange('friends')}>
                         <Text style={[styles.buttonText, selectedTab === 'friends' && styles.activeText]}>Danh sách bạn bè</Text>
                     </TouchableOpacity>
                 </View>
@@ -188,16 +197,20 @@ const ListFriend: React.FC = () => {
             {showPopup && (
                 <View style={styles.popup}>
                     <TouchableOpacity onPress={() => { setSortOrder('asc'); setShowPopup(false); }}>
-                        <Text style={styles.popupText}>Theo chữ cái từ A - Z</Text>
+                        <Text style={styles.popupText}>Sắp xếp từ A - Z</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => { setSortOrder('desc'); setShowPopup(false); }}>
-                        <Text style={styles.popupText}>Theo chữ cái từ Z - A</Text>
+                        <Text style={styles.popupText}>Sắp xếp từ Z - A</Text>
                     </TouchableOpacity>
                 </View>
             )}
 
             {/* Kiểm tra nếu danh sách rỗng */}
-            {sortedFriends.length === 0 ? (
+            {loadingTabChange ? (
+                <View style={styles.loaderContainer}>
+                    <ActivityIndicator size="large" color="#0000ff" />
+                </View>
+            ) : sortedFriends.length === 0 ? (
                 <View style={styles.emptyListContainer}>
                     <Text style={styles.emptyListText}>Danh sách rỗng</Text>
                 </View>
@@ -262,7 +275,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 4,
         padding: 10,
-        width: 135,
+        width: 155,
         zIndex: 10,
     },
     popupText: {
@@ -282,9 +295,9 @@ const styles = StyleSheet.create({
     emptyListText: {
         fontSize: 18,
         color: '#999',
-        fontWeight: 'bold',
-        fontStyle: 'italic',
         textAlign: 'center',
+        fontStyle: 'italic',
+        fontWeight: 'bold'
     },
 });
 

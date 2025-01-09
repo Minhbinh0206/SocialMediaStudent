@@ -92,6 +92,20 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
             />
           </TouchableOpacity>
         );
+      case 'notification': // Trang thoong báo
+        return (
+          <TouchableOpacity>
+            <Image
+              source={require('../icons/icon_recent.png')}
+              style={styles.iconImage}
+            />
+            {messageCount > 0 && (
+              <View style={styles.badgeContainer}>
+                <Text style={styles.badgeText}>{messageCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        );
       case 'profile': // Trang cá nhân
         return (
           <TouchableOpacity>
