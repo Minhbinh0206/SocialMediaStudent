@@ -23,11 +23,24 @@ type HomeHeaderProps = {
 const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
   type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Default'>;
 
+  const [isPressing, setIsPressing] = useState(false); // Trạng thái nhấn nút
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [messageCount, setMessageCount] = useState<number>(5); // Giả lập số tin nhắn
   const [userName, setUserName] = useState<string | null>(null);
   const [gender, setGender] = useState<string | null>(null);
   const navigation = useNavigation<NavigationProp>();
+  
+  const handlePressMessage = () => {
+    if (!isPressing) {
+      setIsPressing(true);
+      navigation.navigate('Message');
+
+      // Đặt lại trạng thái sau một khoảng thời gian để ngừng nhấn liên tục
+      setTimeout(() => {
+        setIsPressing(false);
+      }, 500); // 500ms là khoảng thời gian cho phép nhấn lại
+    }
+  };
 
   useEffect(() => {
     // Lấy UID của người dùng từ Firebase Authentication
@@ -62,7 +75,7 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
     switch (pageName) {
       case 'home': // Trang chủ
         return (
-          <TouchableOpacity>
+          <TouchableOpacity onPress={handlePressMessage}>
             <Image
               source={require('../icons/icon_message.png')}
               style={styles.iconImage}

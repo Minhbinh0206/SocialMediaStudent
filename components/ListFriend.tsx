@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Friend'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'FriendScreen'>;
 
 const ListFriend: React.FC = () => {
     const [myFriends, setMyFriends] = useState<any[]>([]);
@@ -221,7 +221,7 @@ const ListFriend: React.FC = () => {
                     renderItem={({ item }) => (
                         <ItemFriend
                             id={item.friendId}
-                            onCheckFriend={(() => navigation.navigate('Friend', { userId: item.friendId }))}
+                            onCheckFriend={(() => navigation.navigate('FriendScreen', { userId: item.friendId }))}
                         />
                     )}
                 />

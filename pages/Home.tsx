@@ -7,6 +7,7 @@ import ListPost from '../components/ListPost';
 import ListFriend from '../components/ListFriend'; // Import ListFriend component
 import Profile from '../components/Profile';
 import ListNotify from '../components/ListNotify';
+import ListGroup from '../components/ListGroup';
 
 const Home: React.FC = () => {
     const [title, setTitle] = useState('Trang chủ');
@@ -27,6 +28,8 @@ const Home: React.FC = () => {
                     <ListNotify />
                 ) : pageName === 'profile' ? (
                     <Profile />
+                ) : pageName === 'group' ? (
+                    <ListGroup />
                 ) : (
                     <>
                         <ListEvent />

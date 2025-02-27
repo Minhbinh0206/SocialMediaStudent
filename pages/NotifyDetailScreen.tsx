@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
 import database from '@react-native-firebase/database';
 import moment from 'moment';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -8,10 +8,10 @@ import { RootStackParamList } from '../type';
 import { ActivityIndicator } from 'react-native-paper';
 
 interface NotifyDetailProps {
-    route: RouteProp<RootStackParamList, 'NotifyDetail'>; // Fixed here
+    route: RouteProp<RootStackParamList, 'NotifyDetailScreen'>; // Fixed here
 }
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetail'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetailScreen'>;
 
 const NotifyDetail: React.FC<NotifyDetailProps> = ({ route }) => {
     const { idAnnouncer, id } = route.params; // Nhận tham số từ route.params
@@ -128,10 +128,12 @@ const NotifyDetail: React.FC<NotifyDetailProps> = ({ route }) => {
                     <Text style={styles.closeButtonText}>Đóng</Text>
                 </TouchableOpacity>
             </View>
-            <View style={styles.body}>
-                <Text style={styles.title}>{title}</Text>
-                <Text style={styles.content}>{content}</Text>
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.body}>
+                    <Text style={styles.title}>{title}</Text>
+                    <Text style={styles.content}>{content}</Text>
+                </View>
+            </ScrollView>
         </View>
     );
 };
