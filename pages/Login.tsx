@@ -1,20 +1,76 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ImageBackground } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ImageBackground, ActivityIndicator, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 import { database, auth } from '../firebaseConfig'; // Import auth và database từ firebaseConfig
-import { ref, get } from "firebase/database"; // Import phương thức get để đọc dữ liệu từ Firebase Realtime Database
-import { signInWithEmailAndPassword } from 'firebase/auth'; // Import phương thức đăng nhập của Firebase
+import { ref, get, set } from "firebase/database"; // Import phương thức get để đọc dữ liệu từ Firebase Realtime Database
+import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth'; // Import phương thức đăng nhập của Firebase
 
 // Define the navigation prop type
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [emailVerified, setEmailVerified] = useState('');
   const [password, setPassword] = useState('');
-  const [users, setUsers] = useState<any[]>([]); // State để lưu dữ liệu người dùng
   const navigation = useNavigation<NavigationProp>();
+  const [loading, setLoading] = useState(true); // Thêm trạng thái loading
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    const checkAuthState = async () => {
+      setLoading(true);
+
+      const user = auth.currentUser;
+      if (user) {
+        console.log("✅ User đã đăng nhập trước đó:", user.uid);
+
+        await user.reload();
+
+        setShowModal(false); // Đã xác thực
+
+        const userData = await findUserByUid(user.uid);
+        if (!user.emailVerified) {
+          console.log("⚠️ Email chưa xác thực!");
+          setLoading(false);
+          return; // ✅ Dừng ngay nếu chưa xác thực
+        }
+        else {
+          if (userData) {
+            if (!userData.studentName || userData.studentName.trim() === '') {
+              navigation.navigate('UploadProfile', { userId: user.uid });
+            } else {
+              navigation.navigate('Home', { userId: user.uid });
+            }
+          } else {
+            Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng!');
+          }
+        }
+      }
+
+      setLoading(false);
+    };
+
+    checkAuthState();
+
+    // Kiểm tra xác thực mỗi 3s nếu cần
+    const interval = setInterval(async () => {
+      const user = auth.currentUser;
+      if (user) {
+        await user.reload();
+        console.log("🔄 Kiểm tra Email Verify:", user.emailVerified);
+
+        if (user.emailVerified) {
+          setShowModal(false);
+          clearInterval(interval);
+          navigation.navigate('UploadProfile', { userId: user.uid });
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Hàm tìm user trong 'Students' với key là UID của Firebase Auth
   const findUserByUid = (uid: string): Promise<any | null> => {
@@ -24,6 +80,7 @@ const Login: React.FC = () => {
         .then((snapshot) => {
           if (snapshot.exists()) {
             const userData = snapshot.val();
+            setEmailVerified(userData.email);
             resolve(userData);  // Trả về dữ liệu người dùng
           } else {
             console.log("No user data found for this UID.");
@@ -37,45 +94,65 @@ const Login: React.FC = () => {
     });
   };
 
-
-  const handleLogin = () => {
-    if (!email || !password) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email và mật khẩu!');
-      return;
-    }
+  const handleLogin = async () => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
   
-    // Đăng nhập bằng Firebase Auth
-    signInWithEmailAndPassword(auth, email, password)
-      .then(async (userCredential) => {
-        const user = userCredential.user;
+      await user.reload(); // cập nhật trạng thái emailVerified mới nhất
   
-        try {
-          // Tìm người dùng trong 'Students' với UID của Firebase Auth
-          const userData = await findUserByUid(user.uid);  // Ensure this function resolves to user data
+      const userRef = ref(database, `Students/${user.uid}`);
+      const snapshot = await get(userRef);
   
-          if (userData) {
-            if (!userData.studentName || userData.studentName.trim() === '') {
-              navigation.navigate('UploadProfile', { userId: user.uid });
-            } else {
-              //navigation.navigate('Home');
-              navigation.navigate('Home', { userId: user.uid });
-            }
-          } else {
-            Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng!');
-          }
-        } catch (error) {
-          Alert.alert('Lỗi', `Có lỗi xảy ra khi tìm kiếm người dùng`);
+      if (snapshot.exists()) {
+        const userData = snapshot.val();
+        const createdAt = userData.createdAt;
+        const now = Date.now();
+        const THIRTY_MINUTES = 30 * 60 * 1000;
+  
+        if (!user.emailVerified && createdAt && now - createdAt > THIRTY_MINUTES) {
+          // Xóa khỏi Auth
+          await user.delete().catch((err) => {
+            console.error('Không thể xóa Auth user:', err.message);
+          });
+  
+          // Xóa khỏi Realtime DB
+          await set(userRef, null);
+  
+          Alert.alert(
+            'Tài khoản bị xóa',
+            'Bạn chưa xác thực email trong vòng 30 phút. Vui lòng đăng ký lại.'
+          );
+          return;
         }
-      })
-      .catch((error) => {
-        Alert.alert('Thông báo', `Tài khoản hoặc mặt khẩu không chính xác:`);
-      });
-  };
   
+        if (user.emailVerified) {
+          // chuyển vào app nếu email đã xác thực
+          navigation.navigate('Home', { userId: user.uid });
+        } else {
+          setShowModal(true); // Hiện modal nếu email chưa xác thực
+        }
+  
+      } else {
+        Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng trong cơ sở dữ liệu.');
+      }
+  
+    } catch (error: any) {
+      Alert.alert('Lỗi đăng nhập', error.message);
+    }
+  };
+
   const handleSignUp = () => {
     navigation.navigate('Register');
   };
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007bff" />
+      </View>
+    );
+  }
   return (
     <ImageBackground
       source={require('../images/nen_background.jpg')}
@@ -113,6 +190,16 @@ const Login: React.FC = () => {
           <Text style={styles.buttonText}>Đăng nhập</Text>
         </TouchableOpacity>
       </View>
+      <Modal visible={showModal} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalText}>
+              Đường link xác thực đã được gửi đến Email của bạn, hãy xác thực email để tiếp tục...
+            </Text>
+            <ActivityIndicator size="large" color="#007bff" />
+          </View>
+        </View>
+      </Modal>
     </ImageBackground>
   );
 };
@@ -175,6 +262,29 @@ const styles = StyleSheet.create({
     color: '#FFFF33',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });
 

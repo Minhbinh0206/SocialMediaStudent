@@ -14,15 +14,21 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { RadioButton } from 'react-native-paper';
 import database from '@react-native-firebase/database';
-import { ref, get } from '@react-native-firebase/database';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { ref as databaseRef, get } from '@react-native-firebase/database';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import Modal from 'react-native-modal';
 import { RootStackParamList } from '../type';
 import { Image } from 'react-native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import { getAuth } from 'firebase/auth';
+import { set } from 'firebase/database';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Xác định kiểu cho tham số route của màn hình UploadProfile
 type UploadProfileRouteProp = RouteProp<RootStackParamList, 'UploadProfile'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
+
 
 const UploadProfile = () => {
   const route = useRoute<UploadProfileRouteProp>();
@@ -31,7 +37,7 @@ const UploadProfile = () => {
   const [name, setName] = useState('');
   const [mssv, setMssv] = useState('');
   const [email, setEmail] = useState('');
-  const [dob, setDob] = useState(new Date());
+  const [dob, setDob] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState('');
   const [className, setClassName] = useState('');
@@ -45,13 +51,15 @@ const UploadProfile = () => {
   const [isModalMajorVisible, setIsModalMajorVisible] = useState(false);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [selectedMajorId, setSelectedMajorId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const navigation = useNavigation<NavigationProp>();
 
   // Lấy dữ liệu người dùng
   useEffect(() => {
     if (userId) {
       const fetchUserData = async (userId: string) => {
         try {
-          const userRef = ref(database(), `/Students/${userId}`); // Gọi đúng hàm để tạo ref
+          const userRef = databaseRef(database(), `/Students/${userId}`); // Gọi đúng hàm để tạo ref
           const snapshot = await get(userRef); // Gọi đúng hàm để lấy dữ liệu
           if (snapshot.exists()) {
             const userData = snapshot.val();
@@ -133,6 +141,7 @@ const UploadProfile = () => {
           const data = snapshot.val();
           const classList = Object.keys(data).map(key => ({
             label: data[key].className,
+            id: data[key].classId,
             value: key,
           }));
           setClasses(classList);
@@ -145,17 +154,17 @@ const UploadProfile = () => {
     fetchClasses();
   }, [selectedMajorId]); // Chạy lại khi majorName thay đổi
 
-  const handleDateChange = (_: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
+  const handleDateChange = (event: any, selectedDate: any) => {
+    if (event.type === "set" && selectedDate) {
       setDob(selectedDate);
     }
+    setShowDatePicker(false); // Ẩn DateTimePicker sau khi chọn hoặc hủy
   };
 
   const handleChooseAvatar = async () => {
     showImagePickerOptions();
   };
-  
+
   const showImagePickerOptions = () => {
     Alert.alert(
       'Chọn ảnh',
@@ -167,7 +176,7 @@ const UploadProfile = () => {
       ],
     );
   };
-  
+
   const openCamera = () => {
     launchCamera({ mediaType: 'photo' }, response => {
       console.log('Response from camera:', response);
@@ -176,7 +185,7 @@ const UploadProfile = () => {
       }
     });
   };
-  
+
   const openImageLibrary = () => {
     launchImageLibrary({ mediaType: 'photo', selectionLimit: 1 }, response => {
       console.log('Response from image library:', response);
@@ -186,14 +195,63 @@ const UploadProfile = () => {
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name || !dob || !gender || !className || !majorName || !departmentName) {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin!');
       return;
     }
 
-    Alert.alert('Thông báo', 'Thông tin của bạn đã được lưu thành công!');
-    // Thực hiện logic lưu thông tin vào Firebase hoặc xử lý khác ở đây
+    const auth = getAuth();
+    const userId = auth.currentUser?.uid;
+
+    if (!userId) {
+      Alert.alert('Lỗi', 'Không tìm thấy tài khoản người dùng!');
+      return;
+    }
+
+    const storage = getStorage();
+    let avatarUrl = null;
+
+    try {
+      if (avatar) {
+        // 🔹 Sửa lỗi ref() cho Firebase v9+
+        const avatarStorageRef = storageRef(storage, `avatars/${userId}`);
+
+        // Upload ảnh lên Firebase Storage
+        const response = await fetch(avatar);
+        const blob = await response.blob();
+        await uploadBytes(avatarStorageRef, blob);
+
+        // Lấy URL ảnh đã upload
+        avatarUrl = await getDownloadURL(avatarStorageRef);
+      } else {
+        // 🔹 Lấy ảnh mặc định
+        const defaultImageName = gender === 'Nữ' ? 'image_default_girl.img' : 'image_default_boy.img';
+        const defaultImageRef = storageRef(storage, `default_images/${defaultImageName}`);
+        avatarUrl = await getDownloadURL(defaultImageRef);
+      }
+
+      // Lưu thông tin vào Firebase Database
+      const userRef = database().ref(`Students/${userId}`);
+      await userRef.set({
+        studentName: name,
+        email,
+        dob: dob[0], // Định dạng YYYY-MM-DD
+        gender,
+        classId: selectedClassId,
+        majorId: selectedMajorId,
+        departmentId: selectedDepartmentId,
+        avatar: avatarUrl,
+      });
+
+      navigation.navigate('Home', { userId });
+
+      Alert.alert('Thông báo', 'Thông tin của bạn đã được lưu thành công!');
+
+    } catch (error) {
+      console.error('Lỗi khi lưu dữ liệu:', error);
+      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi lưu thông tin. Vui lòng thử lại!');
+    }
   };
 
   return (
@@ -229,14 +287,15 @@ const UploadProfile = () => {
         style={styles.input}
         onPress={() => setShowDatePicker(true)}
       >
-        <Text>{dob ? dob.toLocaleDateString() : 'Chọn ngày sinh'}</Text>
+        <Text>{dob ? dob : 'Chọn ngày sinh'}</Text>
       </TouchableOpacity>
+
       {showDatePicker && (
         <DateTimePicker
-          value={dob}
+          value={dob || new Date()}
           mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           onChange={handleDateChange}
+          maximumDate={new Date()}
         />
       )}
 
@@ -319,6 +378,7 @@ const UploadProfile = () => {
                 onPress={() => {
                   setClassName(classItem.label);
                   setIsModalClassVisible(false);
+                  setSelectedClassId(classItem.value)
                 }}
               >
                 <Text>{classItem.label}</Text>

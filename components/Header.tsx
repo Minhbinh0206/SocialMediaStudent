@@ -29,7 +29,7 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
   const [userName, setUserName] = useState<string | null>(null);
   const [gender, setGender] = useState<string | null>(null);
   const navigation = useNavigation<NavigationProp>();
-  
+
   const handlePressMessage = () => {
     if (!isPressing) {
       setIsPressing(true);
@@ -70,63 +70,91 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
     }
   }, []);
 
+  const handleLogout = () => {
+    // Đăng xuất khỏi Firebase Auth
+    const auth = getAuth();
+    auth.signOut().then(() => {
+      console.log('Đăng xuất thành công');
+      navigation.replace('Login');
+    });
+  }
   // Hàm render icon động dựa trên trang
   const renderRightIcons = () => {
     switch (pageName) {
       case 'home': // Trang chủ
         return (
-          <TouchableOpacity onPress={handlePressMessage}>
-            <Image
-              source={require('../icons/icon_message.png')}
-              style={styles.iconImage}
-            />
-            {messageCount > 0 && (
-              <View style={styles.badgeContainer}>
-                <Text style={styles.badgeText}>{messageCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.rightContainer}>
+            <TouchableOpacity onPress={handlePressMessage}>
+              <Image
+                source={require('../icons/icon_message.png')}
+                style={styles.iconImage}
+              />
+              {messageCount > 0 && (
+                <View style={styles.badgeContainer}>
+                  <Text style={styles.badgeText}>{messageCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <Image source={getAvatar()} style={styles.avatar} />
+          </View>
         );
       case 'friend': // Trang bạn bè
         return (
-          <TouchableOpacity onPress={handleSearch}>
-            <Image
-              source={require('../icons/icon_search.png')}
-              style={styles.iconImage}
-            />
-          </TouchableOpacity>
+          <View style={styles.rightContainer}>
+            <TouchableOpacity onPress={handleSearch}>
+              <Image
+                source={require('../icons/icon_search.png')}
+                style={styles.iconImage}
+              />
+            </TouchableOpacity>
+            <Image source={getAvatar()} style={styles.avatar} />
+          </View>
         );
       case 'group': // Trang nhóm
         return (
-          <TouchableOpacity>
-            <Image
-              source={require('../icons/icon_add.png')}
-              style={styles.iconImage}
-            />
-          </TouchableOpacity>
+          <View style={styles.rightContainer}>
+            <TouchableOpacity>
+              <Image
+                source={require('../icons/icon_add.png')}
+                style={styles.iconImage}
+              />
+            </TouchableOpacity>
+            <Image source={getAvatar()} style={styles.avatar} />
+          </View>
         );
       case 'notification': // Trang thoong báo
         return (
-          <TouchableOpacity>
-            <Image
-              source={require('../icons/icon_recent.png')}
-              style={styles.iconImage}
-            />
-            {messageCount > 0 && (
-              <View style={styles.badgeContainer}>
-                <Text style={styles.badgeText}>{messageCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.rightContainer}>
+            <TouchableOpacity>
+              <Image
+                source={require('../icons/icon_recent.png')}
+                style={styles.iconImage}
+              />
+              {messageCount > 0 && (
+                <View style={styles.badgeContainer}>
+                  <Text style={styles.badgeText}>{messageCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <Image source={getAvatar()} style={styles.avatar} />
+          </View>
         );
       case 'profile': // Trang cá nhân
         return (
-          <TouchableOpacity>
-            <Image
-              source={require('../icons/icon_setting.png')}
-              style={styles.iconImage}
-            />
-          </TouchableOpacity>
+          <View style={styles.rightContainer}>
+            <TouchableOpacity>
+              <Image
+                source={require('../icons/icon_setting.png')}
+                style={styles.iconImage}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout}>
+              <Image
+                source={require('../icons/icon_logout_white.png')}
+                style={styles.iconImage}
+              />
+            </TouchableOpacity>
+          </View>
         );
       default:
         return null;
@@ -156,7 +184,6 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
       <Text style={styles.titleHome}>{title}</Text>
       <View style={styles.rightContainer}>
         {renderRightIcons()}
-        <Image source={getAvatar()} style={styles.avatar} />
       </View>
     </View>
   );

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, TextInput } from 'react-native';
+import { View, Text, Image, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, TextInput, ScrollView, LayoutAnimation } from 'react-native';
 import database from '@react-native-firebase/database';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import HeaderBack from './HeaderBack';
 import { getAuth } from 'firebase/auth';
 import GroupDetailNotJoin from './GroupDetailNotJoin';
+import { set } from 'firebase/database';
 
 const GroupDetailJoined: React.FC = () => {
     const route = useRoute();
@@ -13,6 +14,7 @@ const GroupDetailJoined: React.FC = () => {
     const [adminId, setAdminId] = useState<string | null>(null);
     const [postContent, setPostContent] = useState('');
     const [members, setMembers] = useState<any[]>([]);
+    const [requests, setRequests] = useState<any[]>([]);
     const [isJoined, setIsJoined] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isJoining, setIsJoining] = useState(false);
@@ -21,6 +23,7 @@ const GroupDetailJoined: React.FC = () => {
     const [studentName, setStudentName] = useState<string | null>(null);
     const [studentAvatar, setStudentAvatar] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'posts' | 'me' | 'manager'>('posts');
+    const [selectedTab, setSelectedTab] = useState('members');
 
     console.log('Route params:', route.params);
     console.log('Group ID received:', groupId);
@@ -40,10 +43,23 @@ const GroupDetailJoined: React.FC = () => {
                     ? Object.keys(groupData.members).map(id => ({
                         id,
                         name: groupData.members[id].name,
-                        avatar: groupData.members[id].avatar
+                        avatar: groupData.members[id].avatar,
+                        position: groupData.members[id].position
                     }))
                     : [];
+
+                const requestList = groupData.requests
+                    ? Object.keys(groupData.requests).map(id => ({
+                        id,
+                        name: groupData.requests[id].name,
+                        avatar: groupData.requests[id].avatar,
+                        answer: groupData.requests[id].answer
+                    }))
+                    : [];
+                setRequests(requestList);
                 setMembers(memberList);
+                console.log("Danh sách members:", members);
+
                 setIsJoined(currentUserId ? !!groupData.members?.[currentUserId] : false);
             } else {
                 setGroup(null);
@@ -67,6 +83,53 @@ const GroupDetailJoined: React.FC = () => {
             }
         });
     }, [currentUserId]);
+
+    const handleAccept = (id: string) => {
+        console.log("Duyệt yêu cầu:", id);
+    
+        const memberRef = database().ref(`/Groups/${groupId}/members/${id}`);
+        const requestRef = database().ref(`/Groups/${groupId}/requests/${id}`);
+    
+        requestRef.once('value').then(snapshot => {
+            const requestData = snapshot.val();
+    
+            if (!requestData) {
+                console.error("Không tìm thấy dữ liệu yêu cầu!");
+                return;
+            }
+    
+            // Tạo dữ liệu mới cho member, đổi answer thành position = "Thành viên"
+            const newMemberData = {
+                name: requestData.name,
+                avatar: requestData.avatar,
+                position: "Thành viên", // Gán giá trị cố định
+            };
+    
+            // Thêm vào danh sách members
+            memberRef.set(newMemberData).then(() => {
+                setMembers(prev => [...prev, { id, ...newMemberData }]);
+    
+                // Xóa request sau khi duyệt
+                requestRef.remove().then(() => {
+                    setRequests(prev => prev.filter(req => req.id !== id));
+                });
+            });
+        }).catch(error => console.error("Lỗi khi duyệt yêu cầu:", error));
+    };
+    
+    
+    const handleReject = (id: string) => {
+        console.log("Từ chối yêu cầu:", id);
+    
+        const requestRef = database().ref(`/Groups/${groupId}/requests/${id}`);
+    
+        requestRef.remove().then(() => {
+            // Cập nhật danh sách requests trên state
+            setRequests(prev => prev.filter(req => req.id !== id));
+        }).catch(error => {
+            console.error("Lỗi khi từ chối yêu cầu:", error);
+        });
+    };    
 
     const handleJoinLeave = () => {
         if (!groupId || isJoining) return;
@@ -102,6 +165,11 @@ const GroupDetailJoined: React.FC = () => {
     if (!isJoined) {
         return <GroupDetailNotJoin groupId={groupId} />;
     }
+
+    const handleTabChange = (tab: string) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setSelectedTab(tab);
+    };
 
     return (
         <View style={{ flex: 1 }}>
@@ -170,20 +238,101 @@ const GroupDetailJoined: React.FC = () => {
                 </View>
 
                 {/* Nội dung hiển thị theo tab */}
-                <View style={styles.contentContainer}>
-                    {activeTab === 'posts' ? (
+                {adminId === currentUserId ? (
+                    activeTab === 'posts' ? (
                         <View>
-                            <Text style={styles.contentText}>Danh sách bài viết</Text>
                             {/* Thêm danh sách bài viết ở đây */}
                         </View>
-                    ) : (
+                    ) : activeTab === 'manager' ? (
                         <View>
-                            <Text style={styles.contentText}>Thông tin của tôi</Text>
-                            {/* Thêm thông tin cá nhân ở đây */}
-                        </View>
-                    )}
-                </View>
+                            {/* Thêm quản lý nhóm ở đây */}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                <View style={styles.tabContainer}>
+                                    <TouchableOpacity
+                                        style={[styles.button, selectedTab === 'members' && styles.activeButton]}
+                                        onPress={() => handleTabChange('members')}>
+                                        <Text style={[styles.buttonText, selectedTab === 'members' && styles.activeText]}>Danh sách thành viên</Text>
+                                    </TouchableOpacity>
 
+                                    <TouchableOpacity
+                                        style={[styles.button, selectedTab === 'requests' && styles.activeButton]}
+                                        onPress={() => handleTabChange('requests')}>
+                                        <Text style={[styles.buttonText, selectedTab === 'requests' && styles.activeText]}>Danh sách yêu cầu vào nhóm</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[styles.button, selectedTab === 'postsApprove' && styles.activeButton]}
+                                        onPress={() => handleTabChange('postsApprove')}>
+                                        <Text style={[styles.buttonText, selectedTab === 'postsApprove' && styles.activeText]}>Danh sách bài viết cần duyệt</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </ScrollView>
+
+                            {selectedTab === 'members' && (
+                                <FlatList
+                                    data={members}
+                                    keyExtractor={item => item.id}
+                                    renderItem={({ item }) => (
+                                        <View style={styles.memberItem}>
+                                            <Image source={{ uri: item.avatar }} style={styles.memberAvatar} />
+                                            <View style={styles.memberInfo}>
+                                                <Text style={styles.memberText}>{item.name}</Text>
+                                                <Text style={styles.positionText}>{item.position || 'Không xác định'}</Text>
+                                            </View>
+                                        </View>
+                                    )}
+                                />
+                            )}
+
+                            {selectedTab === 'requests' && (
+                                <FlatList
+                                    data={requests}
+                                    keyExtractor={item => item.id}
+                                    renderItem={({ item }) => (
+                                        <View style={styles.memberItemRequest}>
+                                            <Image source={{ uri: item.avatar }} style={styles.memberAvatar} />
+                                            <View style={styles.memberInfo}>
+                                                <Text style={styles.memberText}>{item.name}</Text>
+                                                <Text style={styles.memberText}>{item.answer || 'Không xác định'}</Text>
+
+                                                {/* Thêm 2 nút "Duyệt" và "Từ chối" */}
+                                                <View style={styles.buttonContainer}>
+                                                    <TouchableOpacity
+                                                        style={styles.rejectButton}
+                                                        onPress={() => handleReject(item.id)}
+                                                    >
+                                                        <Text style={styles.buttonTextV2}>Từ chối</Text>
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity
+                                                        style={styles.acceptButton}
+                                                        onPress={() => handleAccept(item.id)}
+                                                    >
+                                                        <Text style={styles.buttonTextV2}>Chấp nhận</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    )}
+                                />
+                            )}
+                        </View>
+                    ) : () => { }
+                ) : (
+                    <View style={styles.contentContainer}>
+                        {activeTab === 'posts' ? (
+                            <View>
+                                <Text style={styles.contentText}>Danh sách bài viết</Text>
+                                {/* Thêm danh sách bài viết ở đây */}
+                            </View>
+                        ) : (
+                            <View>
+                                <Text style={styles.contentText}>Thông tin của tôi</Text>
+                                {/* Thêm thông tin cá nhân ở đây */}
+                            </View>
+                        )}
+                    </View>
+                )}
             </View>
 
 
@@ -207,6 +356,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         paddingVertical: 10,
         paddingHorizontal: 15,
+    },
+    activeButton: {
+        backgroundColor: '#007BFF',
     },
     tabContainer: {
         flexDirection: 'row',
@@ -278,10 +430,10 @@ const styles = StyleSheet.create({
     button: {
         backgroundColor: '#e2e5e9',
         paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 6,
+        paddingHorizontal: 15,
+        borderRadius: 20,
         alignItems: 'center',
-        margin: 10,
+        margin: 5,
     },
     buttonTab: {
         width: '48%',
@@ -294,9 +446,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     buttonText: {
+        color: '#000',
+        fontSize: 16,
+    },
+    buttonTextV2: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: 'bold',
     },
     sectionTitle: {
         fontSize: 18,
@@ -308,8 +463,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 10,
-        borderBottomWidth: 1,
+        backgroundColor: '#fff',
+        borderTopColor: '#ddd',
         borderBottomColor: '#ddd',
+        borderWidth: 1,
+        paddingVertical: 15,
+    },
+    memberItemRequest: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        padding: 10,
+        backgroundColor: '#fff',
+        borderTopColor: '#ddd',
+        borderBottomColor: '#ddd',
+        borderWidth: 1,
+        paddingVertical: 15,
     },
     memberAvatar: {
         width: 50,
@@ -319,10 +487,15 @@ const styles = StyleSheet.create({
     },
     memberInfo: {
         flex: 1,
+        alignItems: 'flex-start',
+        justifyContent: 'center',
     },
     memberText: {
         fontSize: 16,
         fontWeight: '500',
+    },
+    positionText: {
+        fontSize: 14,
     },
     errorText: {
         fontSize: 18,
@@ -338,6 +511,39 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         textAlign: 'center',
+        backgroundColor: '#fff',
+        paddingTop: 10,
+    },
+    tabManagerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        padding: 10,
+    },
+    tabManagerItem: {
+        padding: 10,
+    },
+    tabManagerText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        marginTop: 5,
+    },
+    acceptButton: {
+        backgroundColor: '#4CAF50',
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderRadius: 5,
+        marginTop: 10
+    },
+    rejectButton: {
+        backgroundColor: '#FF4D4D',
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderRadius: 5,
+        marginRight: 10,
+        marginTop: 10
     },
 });
 

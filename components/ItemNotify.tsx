@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetailScreen'>;
 
 interface ItemNotifyProps {
     idAnnouncer: string;
@@ -70,7 +70,7 @@ const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content
                 .then(() => console.log(`Set read status to true for ${id}`))
                 .catch((error) => console.error("Error setting read status:", error));
 
-            navigation.navigate('NotifyDetail', {idAnnouncer: idAnnouncer, id: id})
+            navigation.navigate('NotifyDetailScreen', {idAnnouncer: idAnnouncer, id: id})
         }
     };
 

@@ -13,7 +13,7 @@ interface NotifyDetailProps {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetailScreen'>;
 
-const NotifyDetail: React.FC<NotifyDetailProps> = ({ route }) => {
+const NotifyDetailScreen: React.FC<NotifyDetailProps> = ({ route }) => {
     const { idAnnouncer, id } = route.params; // Nhận tham số từ route.params
     const [isPressing, setIsPressing] = useState(false); // Trạng thái nhấn nút
     const [notify, setNotify] = useState<any>(null); // State to store the notify data
@@ -223,4 +223,4 @@ const styles = StyleSheet.create({
 });
 
 
-export default NotifyDetail;
+export default NotifyDetailScreen;

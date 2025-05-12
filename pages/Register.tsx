@@ -1,6 +1,6 @@
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import React, { useState, useEffect } from 'react';
+import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { auth, database } from '../firebaseConfig';
 import { ref, set } from 'firebase/database';
@@ -12,10 +12,11 @@ import {
   StyleSheet,
   Alert,
   ImageBackground,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { RootStackParamList } from '../type';
 
-// Define the navigation prop type
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 
 const SignUp: React.FC = () => {
@@ -23,26 +24,27 @@ const SignUp: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const navigation = useNavigation<NavigationProp>(); // Type the navigation object
+  const navigation = useNavigation<NavigationProp>();
+  const [showModal, setShowModal] = useState(false);
+
+
+  useEffect(() => {
+    setEmail(mssv ? `${mssv}@mail.tdc.edu.vn` : '');
+  }, [mssv]);
+
+  const handleLogin = () => {
+    navigation.navigate('Login');
+  };
 
   const handleSignUp = async () => {
-    if (!mssv || !email || !password || !confirmPassword) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin!');
-      return;
-    }
-  
-    if (password !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu và xác nhận mật khẩu không khớp!');
-      return;
-    }
-  
     try {
-      // Đăng ký tài khoản với Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-  
-      // Tạo dữ liệu người dùng trong Realtime Database
-      await set(ref(database, `Students/${user.uid}`), {
+
+      await sendEmailVerification(user);
+
+      const userRef = ref(database, `Students/${user.uid}`);
+      await set(userRef, {
         avatar: '',
         classId: '',
         departmentId: '',
@@ -53,19 +55,16 @@ const SignUp: React.FC = () => {
         gender: '',
         studentName: '',
         studentNumber: mssv,
-        email: email,
-        password: password,
-        userId: getAuth().currentUser?.uid
+        email: user.email,
+        userId: user.uid,
+        createdAt: Date.now(), // lưu timestamp tạo tài khoản
       });
-  
-      navigation.navigate('UploadProfile', { userId: user.uid });
-    } catch (error) {
-      Alert.alert('Thông báo', 'Tài khoản đã tồn tại');
-    }
-  };
 
-  const handleLogin = () => {
-    navigation.navigate('Login'); // Now TypeScript knows 'Register' is a valid route
+      setShowModal(true);
+
+    } catch (error: any) {
+      Alert.alert('Lỗi đăng ký', error.message);
+    }
   };
 
   return (
@@ -76,23 +75,19 @@ const SignUp: React.FC = () => {
     >
       <View style={styles.container}>
         <Text style={styles.title}>Đăng ký</Text>
-
         <TextInput
           style={styles.input}
           placeholder="MSSV"
           value={mssv}
-          onChangeText={setMssv}
+          keyboardType="numeric" // Chỉ cho nhập số
+          onChangeText={(text) => setMssv(text.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
         />
-
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: '#ddd' }]}
           placeholder="Email"
           value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
+          editable={false} // Không cho chỉnh sửa email
         />
-
         <TextInput
           style={styles.input}
           placeholder="Mật khẩu"
@@ -100,7 +95,6 @@ const SignUp: React.FC = () => {
           onChangeText={setPassword}
           secureTextEntry
         />
-
         <TextInput
           style={styles.input}
           placeholder="Xác nhận mật khẩu"
@@ -110,7 +104,7 @@ const SignUp: React.FC = () => {
         />
 
         <View style={styles.registerContainer}>
-          <Text style={styles.registerText}>Đã có tài khoản? </Text>
+          <Text style={styles.registerText}>Bạn đã có tài khoản? </Text>
           <TouchableOpacity onPress={handleLogin}>
             <Text style={styles.registerLink}>Đăng nhập ngay</Text>
           </TouchableOpacity>
@@ -120,20 +114,28 @@ const SignUp: React.FC = () => {
           <Text style={styles.buttonText}>Đăng ký</Text>
         </TouchableOpacity>
       </View>
+      <Modal visible={showModal} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalText}>
+              Đường link xác thực đã được gửi đến Email của bạn, hãy xác thực email để tiếp tục...
+            </Text>
+            <ActivityIndicator size="large" color="#007bff" />
+          </View>
+        </View>
+      </Modal>
     </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-  },
+  background: { flex: 1 },
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Hiệu ứng làm tối nền
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   title: {
     fontSize: 24,
@@ -148,26 +150,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 16,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  button: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#007bff',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 12
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   registerContainer: {
     flexDirection: 'row',
@@ -182,6 +164,38 @@ const styles = StyleSheet.create({
     color: '#FFFF33',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  button: {
+    width: '100%',
+    height: 50,
+    backgroundColor: '#007bff',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });
 

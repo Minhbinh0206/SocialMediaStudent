@@ -23,6 +23,7 @@ import GroupDetail from './pages/GroupDetail';
 import GroupDetailNotJoin from './components/GroupDetailNotJoin';
 import GroupDetailJoined from './components/GroupDetailJoined';
 import CreateGroup from './components/CreateGroup';
+import NotifyDetailScreen from './pages/NotifyDetailScreen';
 
 const Stack = createStackNavigator();
 
@@ -38,7 +39,7 @@ function App(): React.JSX.Element {
         <Stack.Screen name="SearchFriend" component={SearchFriend} options={{ headerShown: false }} />
         <Stack.Screen name="FriendScreen" component={Friend} options={{ headerShown: false }} />
         <Stack.Screen name="CommentScreen" component={CommentScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="NotifyDetail" component={NotifyDetail} options={{ headerShown: false }} />
+        <Stack.Screen name="NotifyDetailScreen" component={NotifyDetailScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Message" component={Message} options={{ headerShown: false }} />
         <Stack.Screen name="MessageDetail" component={MessageDetail} options={{ headerShown: false }} />
         <Stack.Screen name="GroupDetail" component={GroupDetail} options={{ headerShown: false }} />

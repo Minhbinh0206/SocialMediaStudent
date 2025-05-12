@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image } from 'react-native';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getDatabase, ref as dbRef, push, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { StyleSheet } from 'react-native';
 import { RadioButton } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import databasee from '@react-native-firebase/database';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ImageLibraryOptions, launchImageLibrary, MediaType } from 'react-native-image-picker';
+import { RootStackParamList } from '../type';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateGroup'>;
 
 const DEFAULT_QUESTIONS = [
     "Mục đích của bạn khi tham gia nhóm là gì?",
@@ -22,14 +29,20 @@ const DEFAULT_QUESTIONS = [
 const CreateGroup = () => {
     const [groupName, setGroupName] = useState('');
     const [description, setDescription] = useState('');
-    const [privacy, setPrivacy] = useState('public'); // ✅ Riêng tư hoặc công khai
+    const [privacy, setPrivacy] = useState(false);
     const [avatar, setAvatar] = useState<string>('');
     const [banner, setBanner] = useState<string>('');
     const [question, setQuestion] = useState(DEFAULT_QUESTIONS[0]); // Câu hỏi mặc định ban đầu
+    const [isJoining, setIsJoining] = useState(false);
+    const [isJoined, setIsJoined] = useState(false);
+    const [studentName, setStudentName] = useState("");
+    const [studentAvatar, setStudentAvatar] = useState("");
 
     const auth = getAuth();
     const database = getDatabase();
     const storage = getStorage();
+    const navigation = useNavigation<NavigationProp>();
+    const currentUserId = auth.currentUser?.uid;
 
     // 🔹 Upload ảnh lên Firebase Storage
     const uploadImage = async (uri: string, path: string) => {
@@ -41,6 +54,20 @@ const CreateGroup = () => {
         return await getDownloadURL(storageRef);
     };
 
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const studentRef = databasee().ref(`/Students/${currentUserId}`);
+
+        studentRef.once('value').then(snapshot => {
+            if (snapshot.exists()) {
+                const studentData = snapshot.val();
+                setStudentName(studentData.studentName || "Không có tên");
+                setStudentAvatar(studentData.avatar || "URL_avatar_mặc_định");
+            }
+        });
+    }, [currentUserId]);
+
     const swapQuestion = () => {
         let newQuestion;
         do {
@@ -49,35 +76,76 @@ const CreateGroup = () => {
         setQuestion(newQuestion);
     };
 
+    const pickImage = async (type: 'avatar' | 'banner') => {
+        const options: ImageLibraryOptions = {
+            mediaType: 'photo', 
+            quality: 1,
+        };
+        
+        launchImageLibrary(options, response => {
+            if (response.assets && response.assets.length > 0) {
+                const selectedImageUri = response.assets[0].uri;
+                
+                if (selectedImageUri) { // Kiểm tra không phải undefined
+                    if (type === 'avatar') {
+                        setAvatar(selectedImageUri);
+                    } else {
+                        setBanner(selectedImageUri);
+                    }
+                }
+            }
+        });
+    };
+    
     // 🔹 Xử lý tạo nhóm
     const handleCreateGroup = async () => {
         if (!groupName.trim()) {
             return;
         }
 
-        const avatarUrl = await uploadImage(avatar, 'group_avatars');
-        const bannerUrl = await uploadImage(banner, 'group_banners');
+        const avatarUrl = await uploadImage(avatar, 'avatar');
+        const bannerUrl = await uploadImage(banner, 'banner');
 
-        const newGroupRef = push(dbRef(database, 'groups')); // 🔹 Tạo ID nhóm tự động trong Database
+        const newGroupRef = push(dbRef(database, 'Groups')); // 🔹 Tạo ID nhóm tự động trong Database
         const groupId = newGroupRef.key;
 
         await set(newGroupRef, {
-            id: groupId,
-            name: groupName,
-            description,
+            groupId: groupId,
+            groupName: groupName,
             avatar: avatarUrl || 'default_avatar_url', // Nếu không có ảnh thì dùng mặc định
             banner: bannerUrl || 'default_banner_url',
-            privacy,
+            private: privacy,
             adminId: auth.currentUser?.uid,
-            createdAt: new Date().toISOString(),
+            groupDefault: false,
         });
+
+        if (privacy) {
+            // Nếu nhóm riêng tư thì thêm câu hỏi xét duyệt
+            await set(dbRef(database, `Groups/${groupId}/question`), question);
+        }
 
         // Reset form
         setGroupName('');
         setDescription('');
         setAvatar('');
         setBanner('');
-        setPrivacy('public');
+        setPrivacy(false);
+
+        setIsJoining(true);
+
+        databasee()
+            .ref(`/Groups/${groupId}/members/${currentUserId}`)
+            .set({
+                name: studentName,
+                avatar: studentAvatar,
+                role: 'Quản trị viên',
+            })
+            .then(() => {
+                setIsJoined(true);
+            })
+            .finally(() => setIsJoining(false));
+
+        navigation.navigate("GroupDetailJoined", { groupId: groupId ?? "" });
     };
 
     return (
@@ -88,19 +156,20 @@ const CreateGroup = () => {
             <TextInput placeholder="Tên nhóm" value={groupName} onChangeText={setGroupName} style={styles.input} />
 
             {/* Chọn avatar */}
-            <TouchableOpacity style={styles.imagePicker}>
-                {avatar ? <Image source={{ uri: avatar }} style={styles.image} /> : <Text>Chọn Avatar</Text>}
+            <TouchableOpacity style={styles.imagePickerAvatar} onPress={() => pickImage('avatar')}>
+                {avatar ? <Image source={{ uri: avatar }} style={styles.imageAvatar} /> : <Text>Chọn Avatar</Text>}
             </TouchableOpacity>
 
             {/* Chọn banner */}
-            <TouchableOpacity style={styles.imagePicker}>
-                {banner ? <Image source={{ uri: banner }} style={styles.image} /> : <Text>Chọn Banner</Text>}
+            <TouchableOpacity style={styles.imagePicker} onPress={() => pickImage('banner')}>
+                {banner ? <Image source={{ uri: banner }} style={styles.imageBanner} /> : <Text>Chọn Banner</Text>}
             </TouchableOpacity>
 
             {/* Chế độ nhóm */}
             <View style={styles.optionContainer}>
                 <Text style={styles.optionTitle}>Chế độ</Text>
-                <RadioButton.Group onValueChange={setPrivacy} value={privacy}>
+                <RadioButton.Group onValueChange={(value) => setPrivacy(value === 'private')}
+                    value={privacy ? 'private' : 'public'}>
                     <View style={styles.optionRow}>
                         <View style={styles.optionItem}>
                             <RadioButton value="public" color="#0066FF" uncheckedColor="#B0B0B0" />
@@ -115,7 +184,7 @@ const CreateGroup = () => {
             </View>
 
             {/* Nếu nhóm riêng tư thì có thêm câu hỏi xét duyệt */}
-            {privacy === 'private' && (
+            {privacy === true && (
                 <View style={styles.containerQuestion}>
                     <TextInput
                         style={styles.inputQuestion}
@@ -131,9 +200,15 @@ const CreateGroup = () => {
             )}
 
             {/* Nút tạo nhóm */}
-            <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
-                <Text style={styles.createButtonText}>Tạo nhóm</Text>
-            </TouchableOpacity>
+            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                    <Text style={styles.backButtonText}>Quay về</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
+                    <Text style={styles.createButtonText}>Tạo nhóm</Text>
+                </TouchableOpacity>
+            </View>
+
         </View>
     );
 };
@@ -166,7 +241,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#f8f8f8',
     },
-    image: {
+    imagePickerAvatar: {
+        marginVertical: 10,
+        height: 150,
+        width: '40%',
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f8f8f8',
+    },
+    imageAvatar: {
+        width: 200,
+        height: 200,
+        borderRadius: 10,
+    },
+    imageBanner: {
         width: '100%',
         height: '100%',
         borderRadius: 10,
@@ -184,7 +275,7 @@ const styles = StyleSheet.create({
     },
     inputQuestion: {
         flex: 1,
-    },    
+    },
     icon: {
         width: 20,
         height: 20,
@@ -219,10 +310,24 @@ const styles = StyleSheet.create({
         padding: 12,
         borderRadius: 10,
         alignItems: 'center',
+        paddingHorizontal: 25,
     },
     createButtonText: {
         color: '#fff',
-        fontSize: 18,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    backButton: {
+        marginTop: 20,
+        backgroundColor: '#e2e5e9',
+        padding: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    backButtonText: {
+        color: '#000',
+        fontSize: 16,
         fontWeight: 'bold',
     },
 });
