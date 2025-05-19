@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, ActivityIndicator, StyleSheet, Dimensions, Text, TouchableOpacity, ScrollView, Image, TextInput } from 'react-native';
 import { database } from '../firebaseConfig';
-import { ref, onValue, get } from 'firebase/database';
+import { ref, onValue, get, Database, query, orderByChild, equalTo, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
@@ -31,56 +31,9 @@ const ListGroup: React.FC = () => {
 
     useEffect(() => {
         if (currentUserId) {
-            fetchAllGroups();
             setLoading(false);
         }
     }, [currentUserId]);
-
-    const fetchAllGroups = async () => {
-        try {
-            const groupsRef = ref(database, 'Groups');
-            const snapshot = await get(groupsRef);
-
-            if (snapshot.exists()) {
-                const allGroups: any[] = [];
-                const elseGroups: any[] = [];
-                const filteredGroups: any[] = [];
-                const myGroups: any[] = [];
-
-                snapshot.forEach((childSnapshot) => {
-                    const groupId = childSnapshot.key;
-                    const groupData = childSnapshot.val();
-                    allGroups.push({ groupId, ...groupData });
-
-                    // Phân loại nhóm dựa vào groupDefault
-                    if (groupData.groupDefault === false) {
-                        elseGroups.push({ groupId, ...groupData });
-                    } else {
-                        filteredGroups.push({ groupId, ...groupData });
-                    }
-
-                    // Phân loại nhóm do currentUserId làm admin
-                    if (groupData.adminId === currentUserId) {
-                        myGroups.push({ groupId, ...groupData });
-                    }
-                });
-
-                // Cập nhật state sau khi đã xử lý xong
-                setElseGroups(elseGroups);
-                setFilterElseGroups(elseGroups);
-                setFilteredGroups(filteredGroups);
-                setMyGroups(myGroups);
-
-                return allGroups;
-            } else {
-                console.log("Không có nhóm nào trong cơ sở dữ liệu.");
-                return [];
-            }
-        } catch (error) {
-            console.error("Lỗi khi lấy danh sách nhóm:", error);
-            return [];
-        }
-    };
 
     const handleSearch = (text: string) => {
         setSearchText(text);
@@ -96,24 +49,63 @@ const ListGroup: React.FC = () => {
         }
     };
 
-    const handleFilter = (filterType: 'AdminDefaults' | 'AdminDepartments' | 'AdminBusinesses') => {
+    const handleFilter = async (filterType: 'AdminDefaults' | 'AdminDepartments' | 'AdminBusinesses') => {
         setShowPopup(false);
 
-        const adminObject = adminData[filterType];
+        console.log("filterType:", filterType); // Kiểm tra giá trị filterType
+        console.log("adminData:", adminData); // Kiểm tra dữ liệu adminData
 
-        // Kiểm tra nếu không phải object hoặc là null
-        if (!adminObject || typeof adminObject !== 'object') {
-            return;
+        try {
+            // Bước 1: Lấy danh sách adminId của loại admin cụ thể
+            const adminRef = ref(database, `Admins/${filterType}`);
+            const adminSnapshot = await get(adminRef);
+
+            const adminIds = adminSnapshot.exists()
+                ? Object.keys(adminSnapshot.val())
+                : [];
+
+            console.log("adminIds:", adminIds); // Kiểm tra danh sách adminIds
+
+            const listFilter: any[] = [];
+            // Bước 2: Lọc group theo adminId
+            for (let index = 0; index < adminIds.length; index++) {
+                const element = adminIds[index];
+                const groupsByAdminId = await findGroupByAdminId(element);
+                console.log("groupsByAdminId:", groupsByAdminId); // Kiểm tra danh sách nhóm theo adminId
+                listFilter.push(groupsByAdminId);
+            }
+
+            setFilteredGroups(listFilter);
+
+            console.log("filteredGroups:", filteredGroups.length); // Kiểm tra danh sách filteredGroups
+
+            return filteredGroups;
+
+        } catch (error) {
+            console.error('Lỗi lọc nhóm theo adminType:', error);
+            return [];
         }
-
-        // Chuyển object thành mảng các adminId
-        const adminIds = Object.keys(adminObject);
-
-        // Lọc danh sách groups dựa trên adminId
-        const filtered = groups.filter(group => adminIds.includes(group.adminId));
-
-        setFilteredGroups(filtered);
     };
+
+    async function findGroupByAdminId(adminId: string) {
+        try {
+            const groupsRef = ref(database, 'Groups');
+            const q = query(groupsRef, orderByChild('adminId'), equalTo(adminId));
+            const snapshot = await get(q);
+
+            if (!snapshot.exists()) {
+                console.log('Không tìm thấy nhóm nào với adminId:', adminId);
+                return null;
+            }
+
+            const groups = snapshot.val();
+            const firstGroup = Object.values(groups)[0];
+            return firstGroup;
+        } catch (error) {
+            console.error('Lỗi khi tìm nhóm theo adminId:', error);
+            return null;
+        }
+    }
 
     if (loading) {
         return (

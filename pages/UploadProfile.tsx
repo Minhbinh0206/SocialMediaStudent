@@ -37,7 +37,7 @@ const UploadProfile = () => {
   const [name, setName] = useState('');
   const [mssv, setMssv] = useState('');
   const [email, setEmail] = useState('');
-  const [dob, setDob] = useState(null);
+  const [dob, setDob] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState('');
   const [className, setClassName] = useState('');
@@ -187,12 +187,22 @@ const UploadProfile = () => {
   };
 
   const openImageLibrary = () => {
-    launchImageLibrary({ mediaType: 'photo', selectionLimit: 1 }, response => {
-      console.log('Response from image library:', response);
-      if (response.assets && response.assets.length > 0) {
-        setAvatar(response.assets[0].uri || '');
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+      },
+      (response) => {
+        console.log('Response from image library:', response);
+        if (response.didCancel) {
+          console.log('User cancelled image picker');
+        } else if (response.errorCode) {
+          console.log('ImagePicker Error: ', response.errorMessage);
+        } else if (response.assets && response.assets.length > 0) {
+          setAvatar(response.assets[0].uri || '');
+        }
       }
-    });
+    );
   };
 
   const handleSubmit = async () => {
@@ -226,7 +236,7 @@ const UploadProfile = () => {
         avatarUrl = await getDownloadURL(avatarStorageRef);
       } else {
         // 🔹 Lấy ảnh mặc định
-        const defaultImageName = gender === 'Nữ' ? 'image_default_girl.img' : 'image_default_boy.img';
+        const defaultImageName = gender === 'Nữ' ? 'user_avatar_female.jpg' : 'user_avatar_male.img';
         const defaultImageRef = storageRef(storage, `default_images/${defaultImageName}`);
         avatarUrl = await getDownloadURL(defaultImageRef);
       }
@@ -236,12 +246,15 @@ const UploadProfile = () => {
       await userRef.set({
         studentName: name,
         email,
-        dob: dob[0], // Định dạng YYYY-MM-DD
+        birthday: dob?.toISOString().split('T')[0], // ví dụ: "2000-12-31"
         gender,
         classId: selectedClassId,
         majorId: selectedMajorId,
         departmentId: selectedDepartmentId,
         avatar: avatarUrl,
+        studentNumber: mssv,
+        userId,
+        isOnline: true,
       });
 
       navigation.navigate('Home', { userId });
@@ -287,7 +300,7 @@ const UploadProfile = () => {
         style={styles.input}
         onPress={() => setShowDatePicker(true)}
       >
-        <Text>{dob ? dob : 'Chọn ngày sinh'}</Text>
+        <Text>{dob ? dob.toLocaleDateString('vi-VN') : 'Chọn ngày sinh'}</Text>
       </TouchableOpacity>
 
       {showDatePicker && (

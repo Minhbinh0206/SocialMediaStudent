@@ -58,13 +58,22 @@ const Login: React.FC = () => {
     const interval = setInterval(async () => {
       const user = auth.currentUser;
       if (user) {
+        const userData = await findUserByUid(user.uid);
         await user.reload();
         console.log("🔄 Kiểm tra Email Verify:", user.emailVerified);
 
         if (user.emailVerified) {
           setShowModal(false);
           clearInterval(interval);
-          navigation.navigate('UploadProfile', { userId: user.uid });
+          if (userData) {
+            if (!userData.studentName || userData.studentName.trim() === '') {
+              navigation.navigate('UploadProfile', { userId: user.uid });
+            } else {
+              navigation.navigate('Home', { userId: user.uid });
+            }
+          } else {
+            Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng!');
+          }
         }
       }
     }, 3000);
@@ -127,7 +136,7 @@ const Login: React.FC = () => {
         }
   
         if (user.emailVerified) {
-          // chuyển vào app nếu email đã xác thực
+          // Chuyển vào app nếu email đã xác thực
           navigation.navigate('Home', { userId: user.uid });
         } else {
           setShowModal(true); // Hiện modal nếu email chưa xác thực
