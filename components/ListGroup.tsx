@@ -30,6 +30,7 @@ const ListGroup: React.FC = () => {
     const navigation = useNavigation<NavigationProp>();
 
     useEffect(() => {
+        loadAllGroups();
         if (currentUserId) {
             setLoading(false);
         }
@@ -49,38 +50,62 @@ const ListGroup: React.FC = () => {
         }
     };
 
-    const handleFilter = async (filterType: 'AdminDefaults' | 'AdminDepartments' | 'AdminBusinesses') => {
-        setShowPopup(false);
+    const loadAllGroups = async () => {
+        try {
+            const groupsRef = ref(database, 'Groups');
+            const snapshot = await get(groupsRef);
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const groupsArray = Object.keys(data).map((key) => ({
+                    ...data[key],
+                    groupId: key,
+                }));
+                const defaultGroups = groupsArray.filter((group) => group.groupDefault === true);
+                const elseDefaultGroups = groupsArray.filter((group) => group.groupDefault === false);
+                
+                setGroups(defaultGroups);
+                setFilteredGroups(defaultGroups);
+                setElseGroups(elseDefaultGroups);
+            }
+        } catch (error) {
+            console.error('Lỗi khi tải tất cả nhóm:', error);
+        }
+    };
 
-        console.log("filterType:", filterType); // Kiểm tra giá trị filterType
-        console.log("adminData:", adminData); // Kiểm tra dữ liệu adminData
+    const handleFilter = async (filterType: 'Default' | 'AdminDefaults' | 'AdminDepartments' | 'AdminBusinesses') => {
+        setShowPopup(false);
 
         try {
             // Bước 1: Lấy danh sách adminId của loại admin cụ thể
-            const adminRef = ref(database, `Admins/${filterType}`);
-            const adminSnapshot = await get(adminRef);
-
-            const adminIds = adminSnapshot.exists()
-                ? Object.keys(adminSnapshot.val())
-                : [];
-
-            console.log("adminIds:", adminIds); // Kiểm tra danh sách adminIds
-
-            const listFilter: any[] = [];
-            // Bước 2: Lọc group theo adminId
-            for (let index = 0; index < adminIds.length; index++) {
-                const element = adminIds[index];
-                const groupsByAdminId = await findGroupByAdminId(element);
-                console.log("groupsByAdminId:", groupsByAdminId); // Kiểm tra danh sách nhóm theo adminId
-                listFilter.push(groupsByAdminId);
+            if (filterType === 'Default') {
+                setFilteredGroups(groups);
+                return;
             }
+            else {
+                const adminRef = ref(database, `Admins/${filterType}`);
+                const adminSnapshot = await get(adminRef);
 
-            setFilteredGroups(listFilter);
+                const adminIds = adminSnapshot.exists()
+                    ? Object.keys(adminSnapshot.val())
+                    : [];
 
-            console.log("filteredGroups:", filteredGroups.length); // Kiểm tra danh sách filteredGroups
+                console.log("adminIds:", adminIds); // Kiểm tra danh sách adminIds
 
-            return filteredGroups;
+                const listFilter: any[] = [];
+                // Bước 2: Lọc group theo adminId
+                for (let index = 0; index < adminIds.length; index++) {
+                    const element = adminIds[index];
+                    const groupsByAdminId = await findGroupByAdminId(element);
+                    console.log("groupsByAdminId:", groupsByAdminId); // Kiểm tra danh sách nhóm theo adminId
+                    listFilter.push(groupsByAdminId);
+                }
 
+                setFilteredGroups(listFilter);
+
+                console.log("filteredGroups:", filteredGroups.length); // Kiểm tra danh sách filteredGroups
+
+                return filteredGroups;
+            }
         } catch (error) {
             console.error('Lỗi lọc nhóm theo adminType:', error);
             return [];
@@ -183,6 +208,9 @@ const ListGroup: React.FC = () => {
             {/* Popup lọc */}
             {showPopup && (
                 <View style={styles.popup}>
+                    <TouchableOpacity onPress={() => handleFilter('Default')}>
+                        <Text style={styles.popupText}>Tất cả</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleFilter('AdminDefaults')}>
                         <Text style={styles.popupText}>Nhóm Trường</Text>
                     </TouchableOpacity>

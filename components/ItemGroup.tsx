@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 5,
-        elevation: 3, // Tạo bóng trên Android
+        elevation: 3,
     },
     avatar: {
         width: 70,
