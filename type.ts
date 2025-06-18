@@ -4,7 +4,7 @@ export type RootStackParamList = {
   Register: undefined;
   UploadProfile: { userId: string };
   Home: { userId: string };
-  CommentScreen: { postId: string, userPostId: string };
+  CommentScreen: { postId: string, userPostId: string, groupId: string };
   SearchFriend: undefined;
   FriendScreen: { userId: string };
   NotifyDetailScreen: { idAnnouncer: string; id: string };

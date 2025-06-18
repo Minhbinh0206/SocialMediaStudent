@@ -16,15 +16,18 @@ interface Post {
   createdAt: string;
   postImage: string;
   postLike: number;
+  groupId: string;
 }
 
 interface Comment {
   commentId: string;
   userCommentId: string;
-  userPostId: string;
   content: string;
   commentCreateAt: string;
-  commentLike: number;
+  commentLike: {
+    count: number;
+    userIds: string[];
+  };
   onReplyPress: (username: string) => void;
 }
 
@@ -39,6 +42,7 @@ interface Tag {
 const CommentScreen = () => {
   const route = useRoute<RouteProp<RootStackParamList, 'CommentScreen'>>();
   const { postId, userPostId } = route.params;
+  const groupId = route.params.groupId || '';
   const [userPostName, setUserPostName] = useState<string>('');
   const [userCommentNames, setUserCommentNames] = useState<{ [userId: string]: string }>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -49,6 +53,7 @@ const CommentScreen = () => {
   const currentUserId = getAuth().currentUser?.uid;
   const [userNametag, setUserNameTag] = useState<string[]>([]);
   const [tag, setTag] = useState<Tag | null>();
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [commentCount, setCommentCount] = useState<number>(0);
 
   const [postDetails, setPostDetails] = useState<Post | null>(null);
@@ -58,143 +63,111 @@ const CommentScreen = () => {
     setCommentText(text);
   };
 
-  // Lắng nghe sự thay đổi của các bình luận và cập nhật lại tổng số bình luận
-  useEffect(() => {
-    const db = getDatabase();
-    const commentRef = ref(db, `Comments/${userPostId}/${postId}`);
-
-    // Lắng nghe sự thay đổi trong các bình luận của bài viết
-    const commentCountUnsubscribe = onValue(commentRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const commentsData = snapshot.val();
-        const commentList = Object.keys(commentsData).map(key => ({
-          ...commentsData[key],
-          commentId: key,
-        }));
-        setCommentCount(commentList.length); // Cập nhật tổng số bình luận
-        setComments(commentList); // Cập nhật danh sách bình luận
-      } else {
-        setCommentCount(0); // Nếu không có bình luận
-      }
-    });
-
-    return () => {
-      commentCountUnsubscribe(); // Hủy lắng nghe khi component unmount
-    };
-  }, [userPostId, postId]); // Chạy lại khi userPostId hoặc postId thay đổi
-
-  // Cập nhật trạng thái thích theo thời gian thực
-  useEffect(() => {
-    const db = getDatabase();
-    const likeCountRef = ref(db, `Posts/${userPostId}/${postId}/postLike`);
-
-    const unsubscribe = onValue(likeCountRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setLikeCount(snapshot.val());
-      }
-    });
-
-    return () => unsubscribe();
-  }, [userPostId, postId]);
-
   const handlePress = async () => {
     const db = getDatabase();
-    const likeRef = ref(db, `Like/PostLikes/${userPostId}/${postId}/${currentUserId}`);
-    const postRef = ref(db, `Posts/${userPostId}/${postId}/postLike`);
-
-    const newLikeStatus = !liked;
-    setLiked(newLikeStatus);
-    const newLikeCount = newLikeStatus ? likeCount + 1 : likeCount - 1;
+    const postRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/postLike`);
 
     try {
-      await set(likeRef, { liked: newLikeStatus });
-      await set(postRef, newLikeCount); // Cập nhật lượt thích trong bài đăng
+      const snapshot = await get(postRef);
+      let currentPostLike = snapshot.val() || { count: 0, userIds: [] };
+      const newLikeStatus = !liked;
+
+      let updatedUserIds = [...(currentPostLike.userIds || [])];
+      if (newLikeStatus) {
+        if (!updatedUserIds.includes(currentUserId)) {
+          updatedUserIds.push(currentUserId);
+        }
+      } else {
+        updatedUserIds = updatedUserIds.filter(id => id !== currentUserId);
+      }
+
+      const newPostLike = {
+        count: updatedUserIds.length,
+        userIds: updatedUserIds,
+      };
+
+      await set(postRef, newPostLike);
     } catch (error) {
       console.error('Error updating like:', error);
     }
   };
 
   // Kiểm tra trạng thái like ban đầu
-  const checkLikeStatus = async () => {
-    const db = getDatabase();
-    const likeRef = ref(db, `Like/PostLikes/${userPostId}/${postId}/${currentUserId}`);
-
-    try {
-      const snapshot = await get(likeRef);
-      if (snapshot.exists()) {
-        setLiked(snapshot.val().liked);
-      }
-    } catch (error) {
-      console.error('Error checking like status:', error);
-    }
-  };
-
-  const findStudentByUserId = async (userId: string) => {
-    const db = getDatabase();
-    const studentsRef = ref(db, 'Students');
-    const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
-
-    try {
-      const snapshot = await get(studentQuery);
-
-      if (snapshot.exists()) {
-        const studentData = snapshot.val();
-        const studentId = Object.keys(studentData)[0];
-        setUserPostName(studentData[studentId].studentName);
-        setAvatar(studentData[studentId].avatar);
-        setLoading(false);
-      } else {
-        console.log('No student found with userId:', userId);
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    findStudentByUserId(userPostId);
-    checkLikeStatus();
-  }, [userPostId]);
+    const db = getDatabase();
+    const postLikeRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/postLike`);
+
+    const unsubscribe = onValue(postLikeRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setLikeCount(data.count || 0);
+        setLiked(data.userIds?.includes(currentUserId) || false);
+      } else {
+        setLikeCount(0);
+        setLiked(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [groupId, userPostId, postId, currentUserId]);
+
+  const findAdminByUserId = async (userId: string) => {
+    const db = getDatabase();
+    const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+
+    for (const path of adminPaths) {
+      const adminRef = ref(db, `Admins/${path}/${userId}`);
+      const snapshot = await get(adminRef);
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setUserPostName(data.fullName || 'No name');
+        setAvatar(data.avatar || '');
+        setLoading(false);
+        return;
+      }
+    }
+
+    setLoading(false);
+  };
 
   const fetchComments = async () => {
     const db = getDatabase();
-    const commentsRef = ref(db, `Comments/${userPostId}/${postId}`);
+    const commentsRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments`);
 
-    try {
-      const snapshot = await get(commentsRef);
-      if (snapshot.exists()) {
-        const commentsData = snapshot.val();
-        const commentList = Object.keys(commentsData).map(key => ({
-          ...commentsData[key],
-          commentId: key,
-        }));
+    onValue(commentsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const count = data.count || 0;
+        const commentsObject = data.commentData || {};
 
-        // Fetch tên người dùng cho mỗi comment
-        const commentNames: { [userId: string]: string } = {};
-        for (const comment of commentList) {
-          const userId = comment.userCommentId;
-          const userRef = ref(db, `Students/${userId}`); // Giả sử bạn lưu tên người dùng ở đây
+        const commentList: Comment[] = Object.values(commentsObject)
+          .map((item: any): Comment => ({
+            commentId: item.commentId,
+            userCommentId: item.userCommentId,
+            content: item.content,
+            commentCreateAt: item.commentCreateAt,
+            commentLike: item.commentLike,
+            onReplyPress: () => { }, // placeholder, bạn có thể xử lý khác
+          }))
+          .sort(
+            (a, b) =>
+              new Date(a.commentCreateAt).getTime() -
+              new Date(b.commentCreateAt).getTime()
+          );
 
-          const userSnapshot = await get(userRef);
-          if (userSnapshot.exists()) {
-            commentNames[userId] = userSnapshot.val().studentName;
-          } else {
-            commentNames[userId] = 'Unknown'; // Nếu không tìm thấy tên người dùng
-          }
-        }
-
-        // Cập nhật tên người dùng cho mỗi comment
-        setUserCommentNames(commentNames);
+        setCommentCount(count);
         setComments(commentList);
       } else {
-        console.log('Không có bình luận nào');
+        setCommentCount(0);
+        setComments([]);
       }
-    } catch (error) {
-      console.error('Lỗi khi lấy bình luận:', error);
-    }
+    });
   };
+
+  useEffect(() => {
+    fetchComments();
+    findAdminByUserId(userPostId);
+  }, [userPostId]);
 
   const iconPaths = {
     like: require('../icons/icon_like.png'),
@@ -204,25 +177,17 @@ const CommentScreen = () => {
   };
 
   useEffect(() => {
-    fetchComments();
-  }, [postId, userPostId]);
 
-  useEffect(() => {
-    findStudentByUserId(userPostId);
-    checkLikeStatus();
-  }, [userPostId]);
-
-  useEffect(() => {
     const fetchPost = async () => {
       const db = getDatabase();
-      const postRef = ref(db, `Posts/${userPostId}/${postId}`);
+      const postRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}`);
 
       try {
         const snapshot = await get(postRef);
         if (snapshot.exists()) {
           const postData = snapshot.val();
           setPostDetails(postData);
-          setLikeCount(postData.postLike)
+          setLikeCount(postData.postLike?.count || 0);
         } else {
           console.log('Bài viết không tồn tại');
         }
@@ -277,47 +242,57 @@ const CommentScreen = () => {
       setLoading(false);
     }
   };
-  
+
   const handleComment = async () => {
     if (!commentText.trim()) return;
 
     if (tag != null) {
       // Xử lý khi có tag
       const db = getDatabase();
-      const replyRef = ref(db, `Reply/Comments/${userPostId}/${postId}/${tag.userCommentId}/${tag.commentId}`);
+      const replyRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/commentData/${tag.commentId}/replies/replyData`);
       const newReplyRef = push(replyRef);
-  
+
       const replyData = {
-        userPostId: tag.userPostId || '',
-        postId: tag.postId || '',
-        userCommentId: tag.userCommentId || '',
-        commentId: tag.commentId || '',
         content: commentText,
         createdAt: new Date().toISOString(),
         replyLike: 0,
         replyId: newReplyRef.key || '',
         userReplyId: currentUserId || '',
       };
-  
+
       await set(newReplyRef, replyData);
+
+      // Cập nhật lại count
+      const countRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/commentData/${tag.commentId}/replies/count`);
+      await get(countRef).then(snapshot => {
+        const currentCount = snapshot.exists() ? snapshot.val() : 0;
+        set(countRef, currentCount + 1);
+      });
 
       setTag(null);
     }
     else {
       const db = getDatabase();
-      const commentRef = ref(db, `Comments/${userPostId}/${postId}`);
-      const newCommentRef = push(commentRef);
-  
+      const commentDataRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/commentData`);
+      const newCommentRef = push(commentDataRef); // Đẩy vào commentData
+
       const commentData = {
-        userPostId: userPostId,
         userCommentId: currentUserId || '',
         commentId: newCommentRef.key || '',
         content: commentText,
         commentCreateAt: new Date().toISOString(),
         commentLike: 0,
       };
-  
+
+      // Ghi dữ liệu bình luận
       await set(newCommentRef, commentData);
+
+      // Cập nhật lại count
+      const countRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/count`);
+      await get(countRef).then(snapshot => {
+        const currentCount = snapshot.exists() ? snapshot.val() : 0;
+        set(countRef, currentCount + 1);
+      });
     }
 
     setCommentText('');
@@ -331,7 +306,7 @@ const CommentScreen = () => {
     if (userTag.userReplyId != '') {
       findStudentByUserIdReply(userTag.userReplyId);
     }
-    else{
+    else {
       findStudentByUserIdReply(userTag.userCommentId);
     }
 
@@ -341,12 +316,11 @@ const CommentScreen = () => {
     } else {
       setTag(userTag); // Cập nhật lại danh sách tag với một tag duy nhất
     }
-  };  
+  };
 
   const removeTag = () => {
     setTag(null); // Xóa tag
   };
-
 
   return (
     <View style={{ position: 'relative', height: '100%', paddingBottom: 100 }}>
@@ -370,8 +344,35 @@ const CommentScreen = () => {
               </TouchableOpacity>
             </View>
 
-            {postImage && <Image source={{ uri: postImage }} style={styles.postImage} />}
             <Text style={styles.postContent}>{content}</Text>
+
+            {postImage.length > 0 && (
+              <View>
+                {currentImageIndex > 0 && (
+                  <TouchableOpacity
+                    style={styles.leftArrow}
+                    onPress={() => setCurrentImageIndex(prev => Math.max(prev - 1, 0))}
+                  >
+                    <Text style={styles.arrowText}>{'<'}</Text>
+                  </TouchableOpacity>
+                )}
+
+                <Image
+                  source={{ uri: postImage[currentImageIndex] }}
+                  style={styles.postImage}
+                  resizeMode="cover"
+                />
+
+                {currentImageIndex < postImage.length - 1 && (
+                  <TouchableOpacity
+                    style={styles.rightArrow}
+                    onPress={() => setCurrentImageIndex(prev => Math.min(prev + 1, postImage.length - 1))}
+                  >
+                    <Text style={styles.arrowText}>{'>'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             <View style={styles.footer}>
               <TouchableOpacity style={styles.actionButton} onPress={handlePress}>
@@ -394,6 +395,7 @@ const CommentScreen = () => {
             <ScrollView>
               {comments.map((comment) => (
                 <ItemComment
+                  groupId={groupId}
                   userPostId={userPostId}
                   key={comment.commentId}
                   commentId={comment.commentId}
@@ -452,6 +454,29 @@ const CommentScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  leftArrow: {
+    position: 'absolute',
+    left: 10,
+    top: '45%',
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 5,
+    borderRadius: 20,
+  },
+  rightArrow: {
+    position: 'absolute',
+    right: 10,
+    top: '45%',
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 5,
+    borderRadius: 20,
+  },
+  arrowText: {
+    fontSize: 20,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
   container: {
     padding: 15,
     width: '100%',

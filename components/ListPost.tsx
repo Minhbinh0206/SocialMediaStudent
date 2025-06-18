@@ -8,23 +8,27 @@ const ListPost = () => {
     const [posts, setPosts] = useState<any[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
 
-    // Fetch dữ liệu từ Firebase theo thời gian thực
     useEffect(() => {
         const eventsRef = ref(database, 'Posts');
 
-        // Đăng ký sự kiện nhận dữ liệu theo thời gian thực
         const onEventsValueChange = (snapshot: any) => {
             const data = snapshot.val();
 
             if (data) {
                 let loadedPosts: any[] = [];
 
-                Object.keys(data).forEach((userId) => {
-                    Object.keys(data[userId]).forEach((postId) => {
-                        const post = data[userId][postId];
-                        loadedPosts.push({
-                            id: postId,
-                            ...post,
+                Object.keys(data).forEach((groupId) => {
+                    Object.keys(data[groupId]).forEach((userId) => {
+                        Object.keys(data[groupId][userId]).forEach((postId) => {
+                            const post = data[groupId][userId][postId];
+
+                            loadedPosts.push({
+                                id: postId,
+                                postId: postId,
+                                userId: userId,
+                                groupId: groupId,
+                                ...post,
+                            });
                         });
                     });
                 });
@@ -37,18 +41,17 @@ const ListPost = () => {
             setLoading(false);
         };
 
-        // Đăng ký listener cho sự kiện "value" của Firebase
         onValue(eventsRef, onEventsValueChange);
 
-        // Cleanup khi component unmount hoặc khi listener không cần thiết
         return () => {
-            off(eventsRef, 'value', onEventsValueChange); // Dừng listener
+            off(eventsRef, 'value', onEventsValueChange);
         };
-    }, []); // Chạy 1 lần khi component mount
+    }, []);
+
 
     // Hàm render mỗi item trong FlatList
     const renderItem = ({ item }: { item: any }) => (
-        <ItemPost postId={item.postId} userPostId={item.userId} content={item.content} createdAt={item.createdAt} postImage={item.postImage} postLike={item.postLike}/>
+        <ItemPost postId={item.postId} groupId={item.groupId} userPostId={item.userId} content={item.content} createdAt={item.createdAt} postImage={item.postImage} postLike={item.postLike} />
     );
 
     return (

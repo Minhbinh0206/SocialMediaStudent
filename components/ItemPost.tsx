@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
-import { getDatabase, ref, onValue, set, get, query, orderByChild, equalTo } from 'firebase/database';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { getDatabase, ref, onValue, set, get } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,8 +12,18 @@ interface PostProps {
   userPostId: string;
   content: string;
   createdAt: string;
-  postImage: string;
-  postLike: number;
+  postImage: string[];
+  postLike: { count: number; userIds: string[] };
+  groupId: string;
+}
+
+interface Comment {
+  commentId: string;
+  userCommentId: string;
+  content: string;
+  commentCreateAt: string;
+  commentLike: number;
+  onReplyPress: (username: string) => void;
 }
 
 const ItemPost: React.FC<PostProps> = ({
@@ -23,130 +33,127 @@ const ItemPost: React.FC<PostProps> = ({
   createdAt,
   postImage,
   postLike,
+  groupId
 }) => {
   const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [avatar, setAvatar] = useState<string>('');
   const [liked, setLiked] = useState<boolean>(false);
-  const [likeCount, setLikeCount] = useState<number>(postLike);
+  const [likeCount, setLikeCount] = useState<number>(postLike?.count || 0);
   const [commentCount, setCommentCount] = useState<number>(0);
-  const currentUserId = getAuth().currentUser?.uid;
-  const navigation = useNavigation<NavigationProp>();
-
-  type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Default'>;
-
-  // Cập nhật trạng thái thích theo thời gian thực
-  useEffect(() => {
-    const db = getDatabase();
-    const likeRef = ref(db, `Like/PostLikes/${userPostId}/${postId}/${currentUserId}`);
-
-    // Lắng nghe thay đổi trạng thái like
-    const unsubscribe = onValue(likeRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setLiked(snapshot.val().liked);  // Cập nhật trạng thái liked
-      }
-    });
-
-    // Lắng nghe thay đổi số lượng like
-    const likeCountRef = ref(db, `Posts/${userPostId}/${postId}/postLike`);
-    const likeCountUnsubscribe = onValue(likeCountRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setLikeCount(snapshot.val());  // Cập nhật số lượng like
-      }
-    });
-
-    // Cleanup khi component unmount
-    return () => {
-      unsubscribe();
-      likeCountUnsubscribe();
-    };
-  }, [userPostId, postId, currentUserId]);
+  const currentUserId = getAuth().currentUser?.uid ?? '';
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const SLIDER_WIDTH = Dimensions.get('window').width;
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     const db = getDatabase();
-    // Lắng nghe sự thay đổi trong các bình luận của bài đăng
-    const commentRef = ref(db, `Comments/${userPostId}/${postId}`);
+    const postLikeRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/postLike`);
 
-    // Lắng nghe khi có thay đổi trong các bình luận
-    const commentCountUnsubscribe = onValue(commentRef, (snapshot) => {
+    const unsubscribe = onValue(postLikeRef, (snapshot) => {
       if (snapshot.exists()) {
-        const comments = snapshot.val();
-        const commentCount = Object.keys(comments).length; // Số lượng bình luận
-        setCommentCount(commentCount);
+        const data = snapshot.val();
+        setLikeCount(data.count || 0);
+        setLiked(data.userIds?.includes(currentUserId) || false);
       } else {
-        setCommentCount(0); // Nếu không có bình luận
+        setLikeCount(0);
+        setLiked(false);
       }
     });
 
-    // Cleanup khi component unmount
-    return () => {
-      commentCountUnsubscribe();
-    };
+    return () => unsubscribe();
+  }, [groupId, userPostId, postId, currentUserId]);
+
+  useEffect(() => {
+      const fetchComments = async () => {
+        const db = getDatabase();
+        const commentsRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments`);
+    
+        onValue(commentsRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            const count = data.count || 0;
+            const commentsObject = data.commentData || {};
+    
+            const commentList: Comment[] = Object.values(commentsObject)
+              .map((item: any): Comment => ({
+                commentId: item.commentId,
+                userCommentId: item.userCommentId,
+                content: item.content,
+                commentCreateAt: item.commentCreateAt,
+                commentLike: item.commentLike,
+                onReplyPress: () => { }, // placeholder, bạn có thể xử lý khác
+              }))
+              .sort(
+                (a, b) =>
+                  new Date(a.commentCreateAt).getTime() -
+                  new Date(b.commentCreateAt).getTime()
+              );
+    
+            setCommentCount(count);
+          } else {
+            setCommentCount(0);
+          }
+        });
+      };
+
+      fetchComments();
   }, [userPostId, postId]);
 
   const handlePress = async () => {
     const db = getDatabase();
-    const likeRef = ref(db, `Like/PostLikes/${userPostId}/${postId}/${currentUserId}`);
-    const postRef = ref(db, `Posts/${userPostId}/${postId}/postLike`);
-
-    const newLikeStatus = !liked;
-    setLiked(newLikeStatus);
-    const newLikeCount = newLikeStatus ? likeCount + 1 : likeCount - 1;
+    const postRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/postLike`);
 
     try {
-      await set(likeRef, { liked: newLikeStatus });
-      await set(postRef, newLikeCount); // Cập nhật lượt thích trong bài đăng
+      const snapshot = await get(postRef);
+      let currentPostLike = snapshot.val() || { count: 0, userIds: [] };
+      const newLikeStatus = !liked;
+
+      let updatedUserIds = [...(currentPostLike.userIds || [])];
+      if (newLikeStatus) {
+        if (!updatedUserIds.includes(currentUserId)) {
+          updatedUserIds.push(currentUserId);
+        }
+      } else {
+        updatedUserIds = updatedUserIds.filter(id => id !== currentUserId);
+      }
+
+      const newPostLike = {
+        count: updatedUserIds.length,
+        userIds: updatedUserIds,
+      };
+
+      await set(postRef, newPostLike);
     } catch (error) {
       console.error('Error updating like:', error);
     }
   };
 
-  // Kiểm tra trạng thái like ban đầu
-  const checkLikeStatus = async () => {
-    const db = getDatabase();
-    const likeRef = ref(db, `Like/PostLikes/${userPostId}/${postId}/${currentUserId}`);
-
-    try {
-      const snapshot = await get(likeRef);
-      if (snapshot.exists()) {
-        setLiked(snapshot.val().liked);
-      }
-    } catch (error) {
-      console.error('Error checking like status:', error);
-    }
-  };
-
   const handleComment = () => {
-    navigation.navigate('CommentScreen', { postId, userPostId });
+    navigation.navigate('CommentScreen', { postId, userPostId, groupId });
   };
 
-  const findStudentByUserId = async (userId: string) => {
+  const findAdminByUserId = async (userId: string) => {
     const db = getDatabase();
-    const studentsRef = ref(db, 'Students');
-    const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
+    const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
 
-    try {
-      const snapshot = await get(studentQuery);
-
+    for (const path of adminPaths) {
+      const adminRef = ref(db, `Admins/${path}/${userId}`);
+      const snapshot = await get(adminRef);
       if (snapshot.exists()) {
-        const studentData = snapshot.val();
-        const studentId = Object.keys(studentData)[0];
-        setUserName(studentData[studentId].studentName);
-        setAvatar(studentData[studentId].avatar);
+        const data = snapshot.val();
+        setUserName(data.fullName || 'No name');
+        setAvatar(data.avatar || '');
         setLoading(false);
-      } else {
-        console.log('No student found with userId:', userId);
-        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setLoading(false);
     }
+
+    setLoading(false);
   };
 
   useEffect(() => {
-    findStudentByUserId(userPostId);
-    checkLikeStatus();
+    findAdminByUserId(userPostId);
   }, [userPostId]);
 
   const iconPaths = {
@@ -170,6 +177,8 @@ const ItemPost: React.FC<PostProps> = ({
     return `${diffInDays} ngày trước`;
   };
 
+  const images: string[] = Array.isArray(postImage) ? postImage : [postImage];
+
   if (loading) {
     return (
       <View style={styles.loaderContainer}>
@@ -189,15 +198,40 @@ const ItemPost: React.FC<PostProps> = ({
           <Text style={styles.userName}>{userName}</Text>
           <Text style={styles.postDate}>{formatDate(createdAt)}</Text>
         </View>
-
         <TouchableOpacity style={{ position: 'absolute', right: 10 }}>
           <Image source={require('../icons/icon_more.png')} style={{ width: 20, height: 20 }} />
         </TouchableOpacity>
       </View>
 
-      {postImage && <Image source={{ uri: postImage }} style={styles.postImage} />}
-
       <Text style={styles.postContent}>{content}</Text>
+
+      {images.length > 0 && (
+        <View>
+          {currentImageIndex > 0 && (
+            <TouchableOpacity
+              style={styles.leftArrow}
+              onPress={() => setCurrentImageIndex(prev => Math.max(prev - 1, 0))}
+            >
+              <Text style={styles.arrowText}>{'<'}</Text>
+            </TouchableOpacity>
+          )}
+
+          <Image
+            source={{ uri: images[currentImageIndex] }}
+            style={styles.postImage}
+            resizeMode="cover"
+          />
+
+          {currentImageIndex < images.length - 1 && (
+            <TouchableOpacity
+              style={styles.rightArrow}
+              onPress={() => setCurrentImageIndex(prev => Math.min(prev + 1, images.length - 1))}
+            >
+              <Text style={styles.arrowText}>{'>'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.actionButton} onPress={handlePress}>
@@ -271,11 +305,35 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     marginRight: 15,
+    alignItems: 'center',
   },
   icon: {
     width: 20,
     height: 20,
     marginRight: 10,
+  },
+  leftArrow: {
+    position: 'absolute',
+    left: 10,
+    top: '45%',
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 5,
+    borderRadius: 20,
+  },
+  rightArrow: {
+    position: 'absolute',
+    right: 10,
+    top: '45%',
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 5,
+    borderRadius: 20,
+  },
+  arrowText: {
+    fontSize: 20,
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 
