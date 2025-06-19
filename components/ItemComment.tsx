@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { getDatabase, ref, onValue, set, get, query, orderByChild, equalTo } from 'firebase/database';
+import { getDatabase, ref, onValue, set, get, query, orderByChild, equalTo, child } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 import ItemReply from './ItemReply';
+import { database } from '../firebaseConfig';
 
 interface CommentProps {
     userPostId: string;
@@ -123,28 +124,51 @@ const ItemComment: React.FC<CommentProps> = ({
         setIsExpanded(!isExpanded);
     };
 
-    const findStudentByUserId = async (userId: string) => {
-        const db = getDatabase();
-        const studentsRef = ref(db, 'Students');
-        const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
+    const fetchUserComment = async () => {
+        const studentQuery = query(ref(database, 'Students'), orderByChild('userId'), equalTo(userCommentId));
 
         try {
             const snapshot = await get(studentQuery);
             if (snapshot.exists()) {
-                const studentData = snapshot.val();
-                const studentId = Object.keys(studentData)[0];
-                setUserName(studentData[studentId].studentName);
-                setUserAvatar(studentData[studentId].avatar);
+                const studentList = Object.values(snapshot.val());
+                const student = studentList[0] as any; // Nếu cần, bạn có thể định kiểu rõ ràng
+
+                setUserName(student.studentName);
+                setUserAvatar(student.avatar);
+                setLoading(false);
+                return;
             }
-        } catch (error) {
-            console.error('Error fetching student:', error);
+        } catch (err) {
+            console.error('Lỗi khi tìm student:', err);
+        }
+
+        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+        try {
+            for (let path of adminPaths) {
+                const snapshot = await get(child(ref(database), `Admins/${path}/${userCommentId}`));
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    setUserName(data.fullName || 'No name');
+                    setUserAvatar(data.avatar || '/default-avatar.png');
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            console.log('Không tìm thấy userCommentId ở Students hoặc Admins:', userCommentId);
+            setUserName('Không rõ');
+            setUserAvatar('/default-avatar.png');
+        } catch (err) {
+            console.error('Lỗi khi tìm admin:', err);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        findStudentByUserId(userCommentId);
+        if (userCommentId) {
+            fetchUserComment();
+        }
     }, [userCommentId]);
 
     const iconPaths = {
