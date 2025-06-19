@@ -11,7 +11,7 @@ interface PostProps {
   postId: string;
   userPostId: string;
   content: string;
-  createdAt: string;
+  createAt: number;
   postImage: string[];
   postLike: { count: number; userIds: string[] };
   groupId: string;
@@ -30,7 +30,7 @@ const ItemPost: React.FC<PostProps> = ({
   postId,
   userPostId,
   content,
-  createdAt,
+  createAt,
   postImage,
   postLike,
   groupId
@@ -65,39 +65,39 @@ const ItemPost: React.FC<PostProps> = ({
   }, [groupId, userPostId, postId, currentUserId]);
 
   useEffect(() => {
-      const fetchComments = async () => {
-        const db = getDatabase();
-        const commentsRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments`);
-    
-        onValue(commentsRef, (snapshot) => {
-          const data = snapshot.val();
-          if (data) {
-            const count = data.count || 0;
-            const commentsObject = data.commentData || {};
-    
-            const commentList: Comment[] = Object.values(commentsObject)
-              .map((item: any): Comment => ({
-                commentId: item.commentId,
-                userCommentId: item.userCommentId,
-                content: item.content,
-                commentCreateAt: item.commentCreateAt,
-                commentLike: item.commentLike,
-                onReplyPress: () => { }, // placeholder, bạn có thể xử lý khác
-              }))
-              .sort(
-                (a, b) =>
-                  new Date(a.commentCreateAt).getTime() -
-                  new Date(b.commentCreateAt).getTime()
-              );
-    
-            setCommentCount(count);
-          } else {
-            setCommentCount(0);
-          }
-        });
-      };
+    const fetchComments = async () => {
+      const db = getDatabase();
+      const commentsRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments`);
 
-      fetchComments();
+      onValue(commentsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const count = data.count || 0;
+          const commentsObject = data.commentData || {};
+
+          const commentList: Comment[] = Object.values(commentsObject)
+            .map((item: any): Comment => ({
+              commentId: item.commentId,
+              userCommentId: item.userCommentId,
+              content: item.content,
+              commentCreateAt: item.commentCreateAt,
+              commentLike: item.commentLike,
+              onReplyPress: () => { }, // placeholder, bạn có thể xử lý khác
+            }))
+            .sort(
+              (a, b) =>
+                new Date(a.commentCreateAt).getTime() -
+                new Date(b.commentCreateAt).getTime()
+            );
+
+          setCommentCount(count);
+        } else {
+          setCommentCount(0);
+        }
+      });
+    };
+
+    fetchComments();
   }, [userPostId, postId]);
 
   const handlePress = async () => {
@@ -163,10 +163,12 @@ const ItemPost: React.FC<PostProps> = ({
     share: require('../icons/icon_share.png'),
   };
 
-  const formatDate = (date: string) => {
-    const now = new Date();
-    const postDate = new Date(date);
-    const diffInSeconds = Math.floor((now.getTime() - postDate.getTime()) / 1000);
+  const formatDate = (timestamp: number) => {
+    console.log('timestamp', timestamp);
+    if (!timestamp || isNaN(timestamp)) return 'Thời gian không hợp lệ';
+
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - timestamp) / 1000);
     const diffInMinutes = Math.floor(diffInSeconds / 60);
     const diffInHours = Math.floor(diffInMinutes / 60);
     const diffInDays = Math.floor(diffInHours / 24);
@@ -196,7 +198,7 @@ const ItemPost: React.FC<PostProps> = ({
         />
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{userName}</Text>
-          <Text style={styles.postDate}>{formatDate(createdAt)}</Text>
+          <Text style={styles.postDate}>{formatDate(createAt)}</Text>
         </View>
         <TouchableOpacity style={{ position: 'absolute', right: 10 }}>
           <Image source={require('../icons/icon_more.png')} style={{ width: 20, height: 20 }} />

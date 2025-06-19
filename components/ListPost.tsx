@@ -51,7 +51,7 @@ const ListPost = () => {
 
     // Hàm render mỗi item trong FlatList
     const renderItem = ({ item }: { item: any }) => (
-        <ItemPost postId={item.postId} groupId={item.groupId} userPostId={item.userId} content={item.content} createdAt={item.createdAt} postImage={item.postImage} postLike={item.postLike} />
+        <ItemPost postId={item.postId} groupId={item.groupId} userPostId={item.userId} content={item.content} createAt={item.createAt} postImage={item.postImage} postLike={item.postLike} />
     );
 
     return (
