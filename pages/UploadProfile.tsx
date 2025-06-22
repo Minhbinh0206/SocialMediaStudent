@@ -59,7 +59,7 @@ const UploadProfile = () => {
     if (userId) {
       const fetchUserData = async (userId: string) => {
         try {
-          const userRef = databaseRef(database(), `/Students/${userId}`); // Gọi đúng hàm để tạo ref
+          const userRef = databaseRef(database(), `/Users/${userId}`); // Gọi đúng hàm để tạo ref
           const snapshot = await get(userRef); // Gọi đúng hàm để lấy dữ liệu
           if (snapshot.exists()) {
             const userData = snapshot.val();
@@ -78,16 +78,16 @@ const UploadProfile = () => {
     }
   }, [userId]); // Chạy lại khi userId thay đổi
 
-  // Lấy dữ liệu từ Firebase (Khoa)
+  // Lấy danh sách Khoa từ Firebase
   useEffect(() => {
-    const fetchDepartment = async () => {
+    const fetchDepartments = async () => {
       try {
         const snapshot = await database().ref('/Departments').once('value');
         if (snapshot.exists()) {
           const data = snapshot.val();
           const list = Object.keys(data).map(key => ({
             label: data[key].departmentName,
-            value: data[key].departmentId,
+            value: key, // dùng key vì key chính là departmentId
           }));
           setDepartments(list);
         }
@@ -96,55 +96,57 @@ const UploadProfile = () => {
       }
     };
 
-    fetchDepartment();
+    fetchDepartments();
   }, []);
 
   // Lấy Ngành dựa trên DepartmentId đã chọn
   useEffect(() => {
-    const fetchMajor = async () => {
+    if (!selectedDepartmentId) return;
+
+    const fetchMajors = async () => {
       try {
         const snapshot = await database()
-          .ref(`/Majors`)
-          .orderByChild('departmentId')
-          .equalTo(selectedDepartmentId)
+          .ref(`/Departments/${selectedDepartmentId}/majors`)
           .once('value');
 
         if (snapshot.exists()) {
           const data = snapshot.val();
           const list = Object.keys(data).map(key => ({
             label: data[key].majorName,
-            value: data[key].majorId,
+            value: key, // dùng key vì key chính là majorId
           }));
           setMajors(list);
+        } else {
+          setMajors([]); // reset nếu không có ngành
         }
       } catch (error) {
         console.error('Error fetching majors:', error);
       }
     };
 
-    fetchMajor();
+    fetchMajors();
   }, [selectedDepartmentId]);
 
   // Lấy Lớp dựa trên MajorId đã chọn
   useEffect(() => {
-    if (!selectedMajorId) return;
+    if (!selectedDepartmentId || !selectedMajorId) return;
 
     const fetchClasses = async () => {
       try {
         const snapshot = await database()
-          .ref('/Classes')
-          .orderByChild('majorId')
-          .equalTo(selectedMajorId) // Giả sử bạn sẽ lưu ID ngành vào lớp
+          .ref(`/Departments/${selectedDepartmentId}/majors/${selectedMajorId}/classes`)
           .once('value');
 
         if (snapshot.exists()) {
           const data = snapshot.val();
-          const classList = Object.keys(data).map(key => ({
+          const list = Object.keys(data).map(key => ({
             label: data[key].className,
-            id: data[key].classId,
-            value: key,
+            value: key, // key là classId
+            id: data[key].classId, // có thể trùng với value
           }));
-          setClasses(classList);
+          setClasses(list);
+        } else {
+          setClasses([]);
         }
       } catch (error) {
         console.error('Error fetching classes:', error);
@@ -152,7 +154,7 @@ const UploadProfile = () => {
     };
 
     fetchClasses();
-  }, [selectedMajorId]); // Chạy lại khi majorName thay đổi
+  }, [selectedMajorId, selectedDepartmentId]);
 
   const handleDateChange = (event: any, selectedDate: any) => {
     if (event.type === "set" && selectedDate) {
@@ -236,13 +238,15 @@ const UploadProfile = () => {
         avatarUrl = await getDownloadURL(avatarStorageRef);
       } else {
         // 🔹 Lấy ảnh mặc định
-        const defaultImageName = gender === 'Nữ' ? 'user_avatar_female.jpg' : 'user_avatar_male.img';
-        const defaultImageRef = storageRef(storage, `default_images/${defaultImageName}`);
+        const defaultImageName = gender === 'Nữ' ? 'user_avatar_female.jpg' : 'user_avatar_male.jpg';
+        const defaultImageRef = storageRef(storage, `avatars/${defaultImageName}`);
         avatarUrl = await getDownloadURL(defaultImageRef);
       }
 
       // Lưu thông tin vào Firebase Database
-      const userRef = database().ref(`Students/${userId}`);
+      const userRef = database().ref(`Users/${userId}`);
+      const studentRef = database().ref(`Departments/${selectedDepartmentId}/majors/${selectedMajorId}/classes/${selectedClassId}/students/${userId}`);
+      
       await userRef.set({
         studentName: name,
         email,
@@ -255,6 +259,19 @@ const UploadProfile = () => {
         studentNumber: mssv,
         userId,
         isOnline: true,
+      });
+
+      await studentRef.set({
+        studentName: name,
+        email,
+        birthday: dob?.toISOString().split('T')[0], // ví dụ: "2000-12-31"
+        gender,
+        classId: selectedClassId,
+        majorId: selectedMajorId,
+        departmentId: selectedDepartmentId,
+        avatar: avatarUrl,
+        studentNumber: mssv,
+        userId,
       });
 
       navigation.navigate('Home', { userId });
@@ -384,19 +401,27 @@ const UploadProfile = () => {
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Chọn Lớp</Text>
           <ScrollView contentContainerStyle={styles.scrollViewContent}>
-            {classes.map(classItem => (
-              <TouchableOpacity
-                key={classItem.value}
-                style={styles.modalItem}
-                onPress={() => {
-                  setClassName(classItem.label);
-                  setIsModalClassVisible(false);
-                  setSelectedClassId(classItem.value)
-                }}
-              >
-                <Text>{classItem.label}</Text>
-              </TouchableOpacity>
-            ))}
+            {[...classes]
+              .sort((a, b) => {
+                const getLastNumber = (str: string) => {
+                  const match = str.match(/(\d+)(?!.*\d)/); // tìm số cuối cùng
+                  return match ? parseInt(match[1], 10) : 0;
+                };
+                return getLastNumber(a.label) - getLastNumber(b.label);
+              })
+              .map(classItem => (
+                <TouchableOpacity
+                  key={classItem.value}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setClassName(classItem.label);
+                    setIsModalClassVisible(false);
+                    setSelectedClassId(classItem.value);
+                  }}
+                >
+                  <Text>{classItem.label}</Text>
+                </TouchableOpacity>
+              ))}
           </ScrollView>
         </View>
       </Modal>

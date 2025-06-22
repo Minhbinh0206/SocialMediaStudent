@@ -49,7 +49,7 @@ const ListFriend: React.FC = () => {
 
                 const promises = friends.map((friend) => {
                     return new Promise((resolve) => {
-                        const friendRef = ref(database, `Students/${friend.friendId}`);
+                        const friendRef = ref(database, `Users/${friend.friendId}`);
                         onValue(friendRef, (snapshot) => {
                             if (snapshot.exists()) {
                                 const friendData = snapshot.val();
@@ -87,7 +87,7 @@ const ListFriend: React.FC = () => {
                             !myFriends.some((friend) => friend.friendId === suggestedFriendId) &&
                             status === 3
                         ) {
-                            const suggestedFriendRef = ref(database, `Students/${suggestedFriendId}`);
+                            const suggestedFriendRef = ref(database, `Users/${suggestedFriendId}`);
                             onValue(suggestedFriendRef, (snapshot) => {
                                 if (snapshot.exists()) {
                                     const suggestedFriendData = snapshot.val();

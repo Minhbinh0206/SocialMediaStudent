@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { getDatabase, ref, onValue, set, get, query, orderByChild, equalTo, runTransaction } from 'firebase/database';
+import { getDatabase, ref, onValue, set, get, query, orderByChild, equalTo, runTransaction, child } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
+import { database } from '../firebaseConfig';
 
 interface ReplyCommentProps {
     replyId: string;
@@ -109,58 +110,52 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
         }
     };
 
-    // Lấy thông tin người dùng từ userCommentId
-    const findStudentByUserId = async (userId: string) => {
-        const db = getDatabase();
-        const studentsRef = ref(db, 'Students');
-        const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
+    const fetchUserComment = async () => {
+        const studentQuery = query(ref(database, 'Users'), orderByChild('userId'), equalTo(userReplyId));
 
         try {
             const snapshot = await get(studentQuery);
-
             if (snapshot.exists()) {
-                const studentData = snapshot.val();
-                const studentId = Object.keys(studentData)[0];
-                setUserName(studentData[studentId].studentName);
-                setUserAvatar(studentData[studentId].avatar)
+                const studentList = Object.values(snapshot.val());
+                const student = studentList[0] as any; // Nếu cần, bạn có thể định kiểu rõ ràng
+
+                setUserName(student.studentName);
+                setUserAvatar(student.avatar);
                 setLoading(false);
-            } else {
-                console.log('No student found with userId:', userId);
-                setLoading(false);
+                return;
             }
-        } catch (error) {
-            console.error('Error fetching data:', error);
-            setLoading(false);
+        } catch (err) {
+            console.error('Lỗi khi tìm student:', err);
         }
-    };
 
-    const findStudentByUserReplyId = async (userId: string) => {
-        const db = getDatabase();
-        const studentsRef = ref(db, 'Students');
-        const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
-
+        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
         try {
-            const snapshot = await get(studentQuery);
-
-            if (snapshot.exists()) {
-                const studentData = snapshot.val();
-                const studentId = Object.keys(studentData)[0];
-                setUserNameReply(studentData[studentId].studentName);
-                setLoading(false);
-            } else {
-                console.log('No student found with userId:', userId);
-                setLoading(false);
+            for (let path of adminPaths) {
+                const snapshot = await get(child(ref(database), `Admins/${path}/${userReplyId}`));
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    setUserName(data.fullName || 'No name');
+                    setUserAvatar(data.avatar || '/default-avatar.png');
+                    setLoading(false);
+                    return;
+                }
             }
-        } catch (error) {
-            console.error('Error fetching data:', error);
+
+            console.log('Không tìm thấy userCommentId ở Students hoặc Admins:', userCommentId);
+            setUserName('Không rõ');
+            setUserAvatar('/default-avatar.png');
+        } catch (err) {
+            console.error('Lỗi khi tìm admin:', err);
+        } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        findStudentByUserId(userReplyId);
-        findStudentByUserReplyId(userCommentId);
-    }, [userReplyId]);
+        if (userCommentId) {
+            fetchUserComment();
+        }
+    }, [userCommentId]);
 
     const iconPaths = {
         like: require('../icons/icon_like.png'),
@@ -170,22 +165,16 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
     };
 
     const formatDate = (date: string) => {
-        // Kiểm tra giá trị rỗng hoặc không hợp lệ
-        if (!date || isNaN(Date.parse(date))) {
-            return 'Không xác định';
-        }
+        if (!date || isNaN(Date.parse(date))) return 'Không xác định';
 
         const now = new Date();
         const commentDate = new Date(date);
-        const diffInSeconds = Math.floor((now.getTime() - commentDate.getTime()) / 1000);
-        const diffInMinutes = Math.floor(diffInSeconds / 60);
-        const diffInHours = Math.floor(diffInMinutes / 60);
-        const diffInDays = Math.floor(diffInHours / 24);
+        const diff = Math.floor((now.getTime() - commentDate.getTime()) / 1000);
 
-        if (diffInMinutes < 1) return 'Vừa xong';
-        if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-        if (diffInHours < 24) return `${diffInHours} giờ trước`;
-        return `${diffInDays} ngày trước`;
+        if (diff < 60) return 'Vừa xong';
+        if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+        return `${Math.floor(diff / 86400)} ngày trước`;
     };
 
     return (

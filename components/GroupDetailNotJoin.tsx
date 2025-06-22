@@ -75,7 +75,7 @@ const GroupDetailNotJoin: React.FC<GroupDetailNotJoinProps> = ({ groupId }) => {
     useEffect(() => {
         if (!currentUserId) return;
 
-        const studentRef = database().ref(`/Students/${currentUserId}`);
+        const studentRef = database().ref(`/Users/${currentUserId}`);
 
         studentRef.once('value').then(snapshot => {
             if (snapshot.exists()) {

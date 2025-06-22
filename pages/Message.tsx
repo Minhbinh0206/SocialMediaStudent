@@ -26,7 +26,7 @@ const Message = () => {
     useEffect(() => {
         if (!currentUserId) return;
 
-        const announcerRef = ref(database, `Students/${currentUserId}`);
+        const announcerRef = ref(database, `Users/${currentUserId}`);
         const unsubscribe = onValue(announcerRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {

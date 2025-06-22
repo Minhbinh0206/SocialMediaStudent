@@ -51,7 +51,7 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
       const currentUserUID = user.uid;
       // Truy vấn Firebase Realtime Database để lấy thông tin người dùng từ `students/{userId}`
       const db = getDatabase();
-      const userRef = ref(db, 'Students/' + currentUserUID); // Giả sử các thông tin sinh viên được lưu trong `students/{userId}`
+      const userRef = ref(db, 'Users/' + currentUserUID); // Giả sử các thông tin sinh viên được lưu trong `students/{userId}`
 
       get(userRef)
         .then((snapshot) => {

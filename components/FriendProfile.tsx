@@ -24,7 +24,7 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
             console.log('User ID passed:', userId); // Log userId nhận được
 
             if (userId) {
-                const studentsRef = database().ref('Students');
+                const studentsRef = database().ref('Users');
                 studentsRef.once('value', snapshot => {
                     const studentsData = snapshot.val();
 

@@ -19,7 +19,7 @@ const Profile = () => {
             console.log('Current User ID:', userId); // Log UserID
 
             if (userId) {
-                const studentsRef = database().ref('Students');
+                const studentsRef = database().ref('Users');
                 studentsRef.once('value', snapshot => {
                     const studentsData = snapshot.val();
 

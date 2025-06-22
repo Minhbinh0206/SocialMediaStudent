@@ -62,7 +62,7 @@ const NotifyDetailScreen: React.FC<NotifyDetailProps> = ({ route }) => {
         const fetchAnnouncerInfo = async () => {
             try {
                 const snapshot = await database()
-                    .ref(`Students/${idAnnouncer}`) // Truy vấn thông tin người đăng bài từ 'Students'
+                    .ref(`Users/${idAnnouncer}`) // Truy vấn thông tin người đăng bài từ 'Students'
                     .once('value');
 
                 if (snapshot.exists()) {

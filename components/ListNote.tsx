@@ -41,7 +41,7 @@ const ListNote: React.FC = () => {
 
     const findStudentByUserId = async (userId: string) => {
         const db = getDatabase();
-        const studentsRef = ref(db, 'Students');
+        const studentsRef = ref(db, 'Users');
         const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
 
         try {

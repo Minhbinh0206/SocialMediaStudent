@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Platform, UIManager, Animated, useWindowDimensions } from 'react-native';
 import { getDatabase, ref, onValue, set, get } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 import { ActivityIndicator } from 'react-native-paper';
+import RenderHTML from 'react-native-render-html';
+import { LogBox } from 'react-native';
+import truncate from 'html-truncate';
+
+LogBox.ignoreLogs([
+  'Support for defaultProps will be removed from function components'
+]);
 
 interface PostProps {
   postId: string;
@@ -43,8 +50,11 @@ const ItemPost: React.FC<PostProps> = ({
   const [commentCount, setCommentCount] = useState<number>(0);
   const currentUserId = getAuth().currentUser?.uid ?? '';
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const SLIDER_WIDTH = Dimensions.get('window').width;
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const translateY = useRef(new Animated.Value(-20)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const { width } = useWindowDimensions();
+  const [showFullContent, setShowFullContent] = useState(false);
 
   useEffect(() => {
     const db = getDatabase();
@@ -179,18 +189,36 @@ const ItemPost: React.FC<PostProps> = ({
     return `${diffInDays} ngày trước`;
   };
 
-  const images: string[] = Array.isArray(postImage) ? postImage : [postImage];
-
-  if (loading) {
-    return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
+  if (Platform.OS === 'android') {
+    UIManager.setLayoutAnimationEnabledExperimental &&
+      UIManager.setLayoutAnimationEnabledExperimental(true);
   }
 
+  useEffect(() => {
+    if (!loading) {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [loading]);
+
+  const images: string[] = Array.isArray(postImage)
+    ? postImage.filter((img) => img && img.trim() !== '')
+    : postImage && postImage !== ''
+      ? [postImage]
+      : [];
+
   return (
-    <View style={styles.postCard}>
+    <Animated.View style={[styles.postCard, { transform: [{ translateY }], opacity }]}>
       <View style={styles.header}>
         <Image
           source={{ uri: avatar || 'https://tse3.mm.bing.net/th?id=OIP.gYaUpJvv-3E-stUjZ-Pd2AHaHa&pid=Api&P=0&h=180' }}
@@ -205,7 +233,19 @@ const ItemPost: React.FC<PostProps> = ({
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.postContent}>{content}</Text>
+      <RenderHTML
+        baseStyle={styles.postContent}
+        contentWidth={width}
+        source={{ html: showFullContent ? content : truncate(content, 100) }}
+      />
+      {content.length > 100 && (
+        <TouchableOpacity onPress={() => setShowFullContent(!showFullContent)}>
+          <Text style={{ color: '#007AFF', marginBottom: 10 }}>
+            {showFullContent ? 'Ẩn bớt' : 'Xem thêm'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
 
       {images.length > 0 && (
         <View>
@@ -235,6 +275,7 @@ const ItemPost: React.FC<PostProps> = ({
         </View>
       )}
 
+
       <View style={styles.footer}>
         <TouchableOpacity style={styles.actionButton} onPress={handlePress}>
           <Image source={liked ? iconPaths.like_active : iconPaths.like} style={styles.icon} />
@@ -249,7 +290,7 @@ const ItemPost: React.FC<PostProps> = ({
           <Text style={styles.actionText}>0</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -273,11 +314,11 @@ const styles = StyleSheet.create({
   },
   postContent: {
     fontSize: 16,
-    marginVertical: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
   },
   avatar: {
     width: 40,
@@ -305,8 +346,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   actionButton: {
+    marginTop: 10,
     flexDirection: 'row',
-    marginRight: 15,
+    marginHorizontal: 15,
     alignItems: 'center',
   },
   icon: {

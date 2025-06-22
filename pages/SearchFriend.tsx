@@ -18,7 +18,7 @@ const SearchFriend = () => {
         // Lấy dữ liệu từ Firebase Realtime Database
         useEffect(() => {
             const fetchData = async () => {
-                const studentsRef = database().ref('Students');
+                const studentsRef = database().ref('Users');
                 studentsRef.once('value', snapshot => {
                     const studentsData = snapshot.val();
                     if (studentsData) {
@@ -77,7 +77,7 @@ const SearchFriend = () => {
                     data={results}
                     keyExtractor={(item, index) => index.toString()}
                     renderItem={({ item }) => (
-                        <TouchableOpacity onPress={() => navigation.navigate('Friend', { userId: item.userId })}>
+                        <TouchableOpacity onPress={() => navigation.navigate('FriendScreen', { userId: item.userId })}>
                             <View style={styles.resultItem}>
                                 {/* Avatar */}
                                 <Image source={{ uri: item.avatar }} style={styles.avatar} />

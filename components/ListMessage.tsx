@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetail'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetailScreen'>;
 
 const ListMessage: React.FC<{ userId: string }> = ({ userId }) => {
     const [messages, setMessages] = useState<any[]>([]);  // Declare state for storing messages
@@ -21,7 +21,7 @@ const ListMessage: React.FC<{ userId: string }> = ({ userId }) => {
     const handleGoProfile = () => {
         if (!isPressing) {
             setIsPressing(true);
-            navigation.navigate('Friend', { userId: userId });
+            navigation.navigate('FriendScreen', { userId: userId });
 
             setTimeout(() => {
                 setIsPressing(false);
@@ -33,7 +33,7 @@ const ListMessage: React.FC<{ userId: string }> = ({ userId }) => {
         const fetchStudent = async () => {
             try {
                 const db = getDatabase(); // Kết nối database
-                const studentRef = ref(db, `Students/${userId}`); // Tham chiếu đến node Students và id
+                const studentRef = ref(db, `Users/${userId}`); // Tham chiếu đến node Users và id
 
                 const snapshot = await get(studentRef);
                 if (snapshot.exists()) {

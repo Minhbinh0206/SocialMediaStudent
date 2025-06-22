@@ -15,7 +15,7 @@ interface CommentProps {
     commentId: string;
     userCommentId: string;
     content: string;
-    commentCreateAt: string;
+    commentCreateAt: number;
     commentLike: {
         count: number;
         userIds: string[];
@@ -125,7 +125,7 @@ const ItemComment: React.FC<CommentProps> = ({
     };
 
     const fetchUserComment = async () => {
-        const studentQuery = query(ref(database, 'Students'), orderByChild('userId'), equalTo(userCommentId));
+        const studentQuery = query(ref(database, 'Users'), orderByChild('userId'), equalTo(userCommentId));
 
         try {
             const snapshot = await get(studentQuery);
@@ -177,18 +177,21 @@ const ItemComment: React.FC<CommentProps> = ({
         comment: require('../icons/icon_comment.png'),
     };
 
-    const formatDate = (date: string) => {
-        if (!date || isNaN(Date.parse(date))) return 'Không xác định';
+  const formatDate = (timestamp: number) => {
+    console.log('timestamp', timestamp);
+    if (!timestamp || isNaN(timestamp)) return 'Thời gian không hợp lệ';
 
-        const now = new Date();
-        const commentDate = new Date(date);
-        const diff = Math.floor((now.getTime() - commentDate.getTime()) / 1000);
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - timestamp) / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
 
-        if (diff < 60) return 'Vừa xong';
-        if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-        return `${Math.floor(diff / 86400)} ngày trước`;
-    };
+    if (diffInMinutes < 1) return 'Vừa xong';
+    if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+    if (diffInHours < 24) return `${diffInHours} giờ trước`;
+    return `${diffInDays} ngày trước`;
+  };
 
     const fetchReplies = () => {
         const db = getDatabase();

@@ -34,7 +34,7 @@ const ItemMessage: React.FC<{ content: string, type: string, createAt: string, u
     const fetchStudent = async () => {
       try {
         const db = getDatabase(); // Kết nối database
-        const studentRef = ref(db, `Students/${userId}`); // Tham chiếu đến node Students và id
+        const studentRef = ref(db, `Users/${userId}`); // Tham chiếu đến node Students và id
 
         const snapshot = await get(studentRef);
         if (snapshot.exists()) {
@@ -55,7 +55,7 @@ const ItemMessage: React.FC<{ content: string, type: string, createAt: string, u
     const fetchStudent = async () => {
       try {
         const db = getDatabase(); // Kết nối database
-        const studentRef = ref(db, `Students/${currentUserId}`); // Tham chiếu đến node Students và id
+        const studentRef = ref(db, `Users/${currentUserId}`); // Tham chiếu đến node Users và id
 
         const snapshot = await get(studentRef);
         if (snapshot.exists()) {

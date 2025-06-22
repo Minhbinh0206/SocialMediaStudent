@@ -32,7 +32,7 @@ const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content
 
     // Lấy thông tin từ Students
     useEffect(() => {
-        const announcerRef = ref(database, `Students/${idAnnouncer}`);
+        const announcerRef = ref(database, `Users/${idAnnouncer}`);
         const unsubscribe = onValue(announcerRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {

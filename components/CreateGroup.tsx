@@ -57,7 +57,7 @@ const CreateGroup = () => {
     useEffect(() => {
         if (!currentUserId) return;
 
-        const studentRef = databasee().ref(`/Students/${currentUserId}`);
+        const studentRef = databasee().ref(`/Users/${currentUserId}`);
 
         studentRef.once('value').then(snapshot => {
             if (snapshot.exists()) {

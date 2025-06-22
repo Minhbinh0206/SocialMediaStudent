@@ -43,7 +43,7 @@ const SignUp: React.FC = () => {
 
       await sendEmailVerification(user);
 
-      const userRef = ref(database, `Students/${user.uid}`);
+      const userRef = ref(database, `Users/${user.uid}`);
       await set(userRef, {
         avatar: '',
         classId: '',
@@ -57,7 +57,7 @@ const SignUp: React.FC = () => {
         studentNumber: mssv,
         email: user.email,
         userId: user.uid,
-        createdAt: Date.now(), // lưu timestamp tạo tài khoản
+        createdAt: Date.now(),
       });
 
       setShowModal(true);

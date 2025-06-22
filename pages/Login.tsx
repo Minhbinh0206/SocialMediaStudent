@@ -84,7 +84,7 @@ const Login: React.FC = () => {
   // Hàm tìm user trong 'Students' với key là UID của Firebase Auth
   const findUserByUid = (uid: string): Promise<any | null> => {
     return new Promise((resolve, reject) => {
-      const userRef = ref(database, `Students/${uid}`);
+      const userRef = ref(database, `Users/${uid}`);
       get(userRef)
         .then((snapshot) => {
           if (snapshot.exists()) {
@@ -110,7 +110,7 @@ const Login: React.FC = () => {
   
       await user.reload(); // cập nhật trạng thái emailVerified mới nhất
   
-      const userRef = ref(database, `Students/${user.uid}`);
+      const userRef = ref(database, `Users/${user.uid}`);
       const snapshot = await get(userRef);
   
       if (snapshot.exists()) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
-import { getDatabase, ref, get, set, query, orderByChild, equalTo, onValue, push } from 'firebase/database';
+import { getDatabase, ref, get, set, query, orderByChild, equalTo, onValue, push, child } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../type'; // Đảm bảo import đúng RootStackParamList
@@ -8,14 +8,15 @@ import HeaderBack from '../components/HeaderBack';
 import ItemComment from '../components/ItemComment';
 import { TouchableWithoutFeedback } from 'react-native-gesture-handler';
 import { Chip } from 'react-native-paper';
+import { database } from '../firebaseConfig';
 
 interface Post {
   postId: string;
   userPostId: string;
   content: string;
-  createdAt: string;
-  postImage: string;
-  postLike: number;
+  createAt: number;
+  postImage: string[];
+  postLike: { count: number; userIds: string[] };
   groupId: string;
 }
 
@@ -23,7 +24,7 @@ interface Comment {
   commentId: string;
   userCommentId: string;
   content: string;
-  commentCreateAt: string;
+  commentCreateAt: number;
   commentLike: {
     count: number;
     userIds: string[];
@@ -55,6 +56,9 @@ const CommentScreen = () => {
   const [tag, setTag] = useState<Tag | null>();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [commentCount, setCommentCount] = useState<number>(0);
+  const [createdAt, setCreatedAt] = useState<number>(0);
+  const [postImage, setPostImage] = useState<string[]>([]);
+  const [content, setContent] = useState<string>('');
 
   const [postDetails, setPostDetails] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -177,7 +181,6 @@ const CommentScreen = () => {
   };
 
   useEffect(() => {
-
     const fetchPost = async () => {
       const db = getDatabase();
       const postRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}`);
@@ -186,8 +189,11 @@ const CommentScreen = () => {
         const snapshot = await get(postRef);
         if (snapshot.exists()) {
           const postData = snapshot.val();
-          setPostDetails(postData);
+          setPostImage(postData.postImage || []);
+          setContent(postData.content || '');
+          setCreatedAt(postData.createAt || Date.now());
           setLikeCount(postData.postLike?.count || 0);
+          setPostDetails(postData);
         } else {
           console.log('Bài viết không tồn tại');
         }
@@ -207,10 +213,12 @@ const CommentScreen = () => {
     );
   }
 
-  const formatDate = (date: string) => {
-    const now = new Date();
-    const postDate = new Date(date);
-    const diffInSeconds = Math.floor((now.getTime() - postDate.getTime()) / 1000);
+  const formatDate = (timestamp: number) => {
+    console.log('timestamp', timestamp);
+    if (!timestamp || isNaN(timestamp)) return 'Thời gian không hợp lệ';
+
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - timestamp) / 1000);
     const diffInMinutes = Math.floor(diffInSeconds / 60);
     const diffInHours = Math.floor(diffInMinutes / 60);
     const diffInDays = Math.floor(diffInHours / 24);
@@ -221,27 +229,38 @@ const CommentScreen = () => {
     return `${diffInDays} ngày trước`;
   };
 
-  const findStudentByUserIdReply = async (userId: string) => {
-    const db = getDatabase();
-    const studentsRef = ref(db, 'Students');
-    const studentQuery = query(studentsRef, orderByChild('userId'), equalTo(userId));
-
+  const findUserByUserIdReply = async (userId: string) => {
     try {
-      const snapshot = await get(studentQuery);
-
-      if (snapshot.exists()) {
-        const studentData = snapshot.val();
-        const studentId = Object.keys(studentData)[0];
-        setUserNameTag(studentData[studentId].studentName);
-      } else {
-        console.log('No student found with userId:', userId);
+      // 1. Tìm trong Students
+      const studentSnapshot = await get(child(ref(database), `Users/${userId}`));
+      if (studentSnapshot.exists()) {
+        const data = studentSnapshot.val();
+        setUserNameTag(data.studentName || 'No name');
         setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching data:', error);
+
+      // 2. Tìm trong Admins theo các nhánh
+      const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+      for (let path of adminPaths) {
+        const adminSnapshot = await get(child(ref(database), `Admins/${path}/${userId}`));
+        if (adminSnapshot.exists()) {
+          const data = adminSnapshot.val();
+          setUserNameTag(data.fullName || 'No name');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 3. Không tìm thấy ai
+      console.log('Không tìm thấy userId ở Students hoặc Admins:', userId);
+    } catch (err) {
+      console.error('Lỗi khi tìm user:', err);
+    } finally {
       setLoading(false);
     }
   };
+
 
   const handleComment = async () => {
     if (!commentText.trim()) return;
@@ -254,7 +273,7 @@ const CommentScreen = () => {
 
       const replyData = {
         content: commentText,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
         replyLike: 0,
         replyId: newReplyRef.key || '',
         userReplyId: currentUserId || '',
@@ -280,7 +299,7 @@ const CommentScreen = () => {
         userCommentId: currentUserId || '',
         commentId: newCommentRef.key || '',
         content: commentText,
-        commentCreateAt: new Date().toISOString(),
+        commentCreateAt: Date.now(),
         commentLike: 0,
       };
 
@@ -299,24 +318,17 @@ const CommentScreen = () => {
     Keyboard.dismiss();
   };
 
-  const { postImage, content, createdAt } = postDetails;
 
   // Xử lý khi nhấn vào icon bình luận
   const handleTagUser = (userTag: Tag) => {
-    if (userTag.userReplyId != '') {
-      findStudentByUserIdReply(userTag.userReplyId);
-    }
-    else {
-      findStudentByUserIdReply(userTag.userCommentId);
-    }
+    const userId = userTag.userReplyId !== '' ? userTag.userReplyId : userTag.userCommentId;
+    findUserByUserIdReply(userId); // Gọi hàm tổng hợp
 
-    console.log('Clicked:', userNametag); // Kiểm tra log
-    if (tag == null) {
-      setTag(userTag); // Thêm tag nếu danh sách tag rỗng
-    } else {
-      setTag(userTag); // Cập nhật lại danh sách tag với một tag duy nhất
-    }
+    console.log('Clicked:', userNametag); // Debug log
+
+    setTag(userTag); // Gán hoặc cập nhật tag
   };
+
 
   const removeTag = () => {
     setTag(null); // Xóa tag
