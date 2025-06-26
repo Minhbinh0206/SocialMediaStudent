@@ -189,22 +189,17 @@ const ItemPost: React.FC<PostProps> = ({
     return `${diffInDays} ngày trước`;
   };
 
-  if (Platform.OS === 'android') {
-    UIManager.setLayoutAnimationEnabledExperimental &&
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-  }
-
   useEffect(() => {
     if (!loading) {
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: 0,
-          duration: 400,
+          duration: 100,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: 1,
-          duration: 400,
+          duration: 100,
           useNativeDriver: true,
         }),
       ]).start();

@@ -5,6 +5,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import HeaderBack from './HeaderBack';
 import { getAuth } from 'firebase/auth';
 import GroupDetailNotJoin from './GroupDetailNotJoin';
+import ListPost from './ListPost';
+import { ScrollView } from 'react-native-gesture-handler';
 
 const GroupDetailDefault: React.FC = () => {
     const route = useRoute();
@@ -15,11 +17,26 @@ const GroupDetailDefault: React.FC = () => {
     const [isJoined, setIsJoined] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isJoining, setIsJoining] = useState(false);
-    const navigation = useNavigation();
     const currentUserId = getAuth().currentUser?.uid;
     const [studentName, setStudentName] = useState<string | null>(null);
     const [studentAvatar, setStudentAvatar] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'posts' | 'events'>('posts');
+    const [posts, setPosts] = useState<any[]>([]);
+    const navigation = useNavigation(); // Khai báo useNavigation
+    const [isPressing, setIsPressing] = useState(false); // Trạng thái nhấn nút
+
+    const handleBackPress = () => {
+        if (!isPressing) {
+            setIsPressing(true);
+            navigation.goBack();
+
+            // Đặt lại trạng thái sau một khoảng thời gian để ngừng nhấn liên tục
+            setTimeout(() => {
+                setIsPressing(false);
+            }, 500); // 500ms là khoảng thời gian cho phép nhấn lại
+        }
+    };
+
 
     useEffect(() => {
         if (!groupId) return;
@@ -49,6 +66,50 @@ const GroupDetailDefault: React.FC = () => {
         return () => groupRef.off();
     }, [groupId]);
 
+    const fetchGroupPosts = async (groupId: string): Promise<any[]> => {
+        const postsRef = database().ref(`Posts/${groupId}`);
+        const snapshot = await postsRef.once('value');
+
+        if (!snapshot.exists()) return [];
+
+        const groupPosts = snapshot.val();
+        const loadedPosts: any[] = [];
+
+        for (const userId in groupPosts) {
+            const userPosts = groupPosts[userId];
+
+            for (const postId in userPosts) {
+                const post = userPosts[postId];
+
+                loadedPosts.push({
+                    postId,
+                    userId,
+                    groupId,
+                    ...post
+                });
+            }
+        }
+
+        // Sắp xếp theo thời gian mới nhất
+        loadedPosts.sort((a, b) => Number(b.createAt) - Number(a.createAt));
+
+        return loadedPosts;
+    };
+
+    useEffect(() => {
+        if (!groupId) return;
+
+        const loadPosts = async () => {
+            setLoading(true);
+            const groupPosts = await fetchGroupPosts(groupId);
+            setPosts(groupPosts);
+            setLoading(false);
+        };
+
+        loadPosts();
+    }, [groupId]);
+
+
     useEffect(() => {
         if (!currentUserId) return;
 
@@ -63,29 +124,6 @@ const GroupDetailDefault: React.FC = () => {
         });
     }, [currentUserId]);
 
-    const handleJoinLeave = () => {
-        if (!groupId || isJoining) return;
-        setIsJoining(true);
-        const memberRef = database().ref(`/Groups/${groupId}/members/${currentUserId}`);
-
-        if (isJoined) {
-            memberRef.remove().then(() => {
-                setIsJoined(false);
-                setMembers(prev => prev.filter(member => member.id !== currentUserId));
-            }).finally(() => setIsJoining(false));
-        } else {
-            const newMember = {
-                name: studentName,
-                avatar: studentAvatar
-            };
-
-            memberRef.set(newMember).then(() => {
-                setIsJoined(true);
-                setMembers(prev => [...prev, { id: currentUserId, ...newMember }]);
-            }).finally(() => setIsJoining(false));
-        }
-    };
-
     if (loading) {
         return (
             <View style={styles.loading}>
@@ -96,9 +134,16 @@ const GroupDetailDefault: React.FC = () => {
 
     return (
         <View style={{ flex: 1 }}>
-            <HeaderBack />
+            <View style={styles.headerContainer}>
+                <TouchableOpacity onPress={handleBackPress}>
+                    <Image
+                        source={require('../icons/icon_back.png')}
+                        style={styles.iconImage}
+                    />
+                </TouchableOpacity>
+            </View>
 
-            <View style={styles.container}>
+            <ScrollView style={styles.container}>
                 {group.banner && <Image source={{ uri: group.banner }} style={styles.banner} />}
                 <View style={styles.groupHeader}>
                     {group.avatar && <Image source={{ uri: group.avatar }} style={styles.avatar} />}
@@ -130,7 +175,7 @@ const GroupDetailDefault: React.FC = () => {
                     {activeTab === 'posts' ? (
                         <View>
                             <Text style={styles.contentText}>Danh sách bài viết</Text>
-                            {/* Thêm danh sách bài viết ở đây */}
+                            <ListPost posts={posts} loading={loading} />
                         </View>
                     ) : (
                         <View>
@@ -140,14 +185,25 @@ const GroupDetailDefault: React.FC = () => {
                     )}
                 </View>
 
-            </View>
-
-
+            </ScrollView>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
+    headerContainer: {
+        width: '100%',
+        height: 60,
+        backgroundColor: '#3399FF',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 10,
+    },
+    iconImage: {
+        width: 30,
+        height: 30,
+    },
     container: {
         flex: 1,
         backgroundColor: '#e2e5e9',

@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import { onValue, ref } from 'firebase/database';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Image } from 'react-native';
+import { auth, database } from '../firebaseConfig';
 
 type Props = {
     onIconPress: (title: string, page: string) => void; // Truyền thêm thông tin trang
@@ -7,7 +9,10 @@ type Props = {
 
 const Navigation: React.FC<Props> = ({ onIconPress }) => {
     const [activeIcon, setActiveIcon] = useState<string>('home');
-    const notificationCount = 0;
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [rawNotifications, setRawNotifications] = useState<any[]>([]);
+    const [unreadCount, setUnreadCount] = useState<number>(0);
 
     const iconPaths = {
         home: require('../icons/icon_home.png'),
@@ -22,6 +27,16 @@ const Navigation: React.FC<Props> = ({ onIconPress }) => {
         friend_active: require('../icons/icon_friends_active.png'),
     };
 
+    useEffect(() => {
+        const userId = auth.currentUser?.uid;
+        if (!userId) return;
+        const userRef = ref(database, `Users/${userId}`);
+        onValue(userRef, (snap) => {
+            const data = snap.val();
+            setCurrentUser({ ...data, userId });
+        });
+    }, []);
+
     const getTextColor = (iconName: string) => {
         return activeIcon === iconName ? '#3399FF' : '#000000';
     };
@@ -30,6 +45,61 @@ const Navigation: React.FC<Props> = ({ onIconPress }) => {
         setActiveIcon(iconName);
         onIconPress(title, page); // Gửi thông tin về cha
     };
+
+
+    useEffect(() => {
+        const notifiesRef = ref(database, 'Notifies');
+        const unsubscribe = onValue(notifiesRef, (snap) => {
+            const data = snap.val();
+            if (data) {
+                const list = Object.keys(data).flatMap((uid) =>
+                    Object.keys(data[uid]).map((nid) => ({
+                        notifyId: nid,
+                        userId: uid,
+                        ...data[uid][nid],
+                    }))
+                );
+                setRawNotifications(list);
+            } else setRawNotifications([]);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        if (!currentUser || rawNotifications.length === 0) {
+            setNotifications([]);
+            return;
+        }
+
+        const filtered = rawNotifications.filter((n) => {
+            const { filterData } = n;
+            const user = currentUser;
+            switch (filterData?.filterType) {
+                case 'allStudents': return true;
+                case 'departmentStudents':
+                case 'myDepartment':
+                case 'departmentCollabStudents':
+                    return filterData.departmentIds?.includes(user.departmentId);
+                case 'personalStudents':
+                case 'personalDepartmentStudents':
+                    return filterData.userIds?.includes(user.userId);
+                case 'byClass':
+                    return filterData.classIds?.includes(user.classId);
+                case 'majors':
+                    return filterData.majorIds?.includes(user.majorId);
+                default:
+                    return false;
+            }
+        });
+
+        filtered.sort((a, b) => b.createAt - a.createAt);
+        setNotifications(filtered);
+
+        // Đếm số thông báo chưa đọc
+        const unread = filtered.filter(n => !n.actives?.reads?.[currentUser.userId]);
+        setUnreadCount(unread.length);
+
+    }, [currentUser, rawNotifications]);
 
     return (
         <View style={styles.navbar}>
@@ -64,9 +134,9 @@ const Navigation: React.FC<Props> = ({ onIconPress }) => {
                         style={{ width: 27, height: 30, marginHorizontal: 15 }}
                     />
                     <Text style={[styles.titleIcon, { color: getTextColor('notification') }]}>Thông báo</Text>
-                    {notificationCount > 0 && (
+                    {unreadCount > 0 && (
                         <View style={styles.badgeContainer}>
-                            <Text style={styles.badgeText}>{notificationCount}</Text>
+                            <Text style={styles.badgeText}>{unreadCount}</Text>
                         </View>
                     )}
                 </View>

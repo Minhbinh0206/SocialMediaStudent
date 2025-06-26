@@ -2,23 +2,25 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'react-native';
 import database from '@react-native-firebase/database';
 import moment from 'moment';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 import { ActivityIndicator } from 'react-native-paper';
+import { get, getDatabase, ref } from 'firebase/database';
 
 interface NotifyDetailProps {
-    route: RouteProp<RootStackParamList, 'NotifyDetailScreen'>; // Fixed here
+    route: RouteProp<RootStackParamList, 'NotifyDetailScreen'>;
 }
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetailScreen'>;
 
 const NotifyDetailScreen: React.FC<NotifyDetailProps> = ({ route }) => {
-    const { idAnnouncer, id } = route.params; // Nhận tham số từ route.params
-    const [isPressing, setIsPressing] = useState(false); // Trạng thái nhấn nút
-    const [notify, setNotify] = useState<any>(null); // State to store the notify data
-    const [announcerInfo, setAnnouncerInfo] = useState<any>(null); // State to store announcer info
-    const [loading, setLoading] = useState<boolean>(true); // State to track loading
+    const { userId, notifyId } = route.params;
+    const [isPressing, setIsPressing] = useState(false);
+    const [notify, setNotify] = useState<any>(null);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [userName, setUserName] = useState<string>('No name');
+    const [avatar, setAvatar] = useState<string>('');
 
     const navigation = useNavigation<NavigationProp>();
 
@@ -27,19 +29,17 @@ const NotifyDetailScreen: React.FC<NotifyDetailProps> = ({ route }) => {
             setIsPressing(true);
             navigation.goBack();
 
-            // Đặt lại trạng thái sau một khoảng thời gian để ngừng nhấn liên tục
             setTimeout(() => {
                 setIsPressing(false);
-            }, 500); // 500ms là khoảng thời gian cho phép nhấn lại
+            }, 500);
         }
     };
 
-    // Fetch thông báo
     useEffect(() => {
         const fetchNotify = async () => {
             try {
                 const snapshot = await database()
-                    .ref(`Notifies/${idAnnouncer}/${id}`)
+                    .ref(`Notifies/${userId}/${notifyId}`)
                     .once('value');
 
                 if (snapshot.exists()) {
@@ -55,52 +55,11 @@ const NotifyDetailScreen: React.FC<NotifyDetailProps> = ({ route }) => {
         };
 
         fetchNotify();
-    }, [idAnnouncer, id]);
+    }, [userId, notifyId]);
 
-    // Fetch thông tin người đăng bài từ 'Students'
-    useEffect(() => {
-        const fetchAnnouncerInfo = async () => {
-            try {
-                const snapshot = await database()
-                    .ref(`Users/${idAnnouncer}`) // Truy vấn thông tin người đăng bài từ 'Students'
-                    .once('value');
-
-                if (snapshot.exists()) {
-                    setAnnouncerInfo(snapshot.val()); // Lưu thông tin vào state
-                } else {
-                    console.log('Không tìm thấy thông tin người đăng.');
-                }
-            } catch (error) {
-                console.log('Lỗi khi lấy thông tin người đăng: ', error);
-            }
-        };
-
-        fetchAnnouncerInfo();
-    }, [idAnnouncer]);
-
-    if (loading) {
-        return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#0000ff" />
-            </View>
-        );
-    }
-
-    if (!notify || !announcerInfo) {
-        return (
-            <View style={styles.container}>
-                <Text style={styles.error}>Không tìm thấy thông báo hoặc người đăng bài.</Text>
-            </View>
-        );
-    }
-
-    const { announcerName, announcerAvatar, title, content, createAt } = notify;
-    const { studentName, avatar } = announcerInfo; // Lấy tên và avatar từ thông tin người đăng
-
-    const formatDate = (date: string) => {
-        const now = new Date();
-        const postDate = new Date(date);
-        const diffInSeconds = Math.floor((now.getTime() - postDate.getTime()) / 1000);
+    const formatDate = (timestamp: number) => {
+        const now = Date.now();
+        const diffInSeconds = Math.floor((now - timestamp) / 1000);
         const diffInMinutes = Math.floor(diffInSeconds / 60);
         const diffInHours = Math.floor(diffInMinutes / 60);
         const diffInDays = Math.floor(diffInHours / 24);
@@ -111,18 +70,54 @@ const NotifyDetailScreen: React.FC<NotifyDetailProps> = ({ route }) => {
         return `${diffInDays} ngày trước`;
     };
 
+    useEffect(() => {
+        const findAdminByUserId = async (userId: string) => {
+            const db = getDatabase();
+            const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
+
+            for (const path of adminPaths) {
+                const adminRef = ref(db, `Admins/${path}/${userId}`);
+                const snapshot = await get(adminRef);
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    setUserName(data.fullName || 'No name');
+                    setAvatar(data.avatar || '');
+                    return;
+                }
+            }
+        };
+
+        findAdminByUserId(userId);
+    }, [userId]);
+
+    if (loading) {
+        return (
+            <View style={styles.loaderContainer}>
+                <ActivityIndicator size="large" color="#0000ff" />
+            </View>
+        );
+    }
+
+    if (!notify) {
+        return (
+            <View style={styles.container}>
+                <Text style={styles.error}>Không tìm thấy thông báo.</Text>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <Text style={styles.headerTitle}>THÔNG BÁO</Text>
 
             <View style={styles.header}>
                 <Image
-                    source={{ uri: avatar || announcerAvatar }}
+                    source={{ uri: avatar }}
                     style={styles.avatar}
                 />
                 <View style={styles.announcerInfo}>
-                    <Text style={styles.announcerName}>{studentName || announcerName}</Text>
-                    <Text style={styles.time}>{formatDate(createAt)}</Text>
+                    <Text style={styles.announcerName}>{userName}</Text>
+                    <Text style={styles.time}>{formatDate(notify.createAt)}</Text>
                 </View>
                 <TouchableOpacity style={styles.closeButton} onPress={handlePress}>
                     <Text style={styles.closeButtonText}>Đóng</Text>
@@ -130,8 +125,8 @@ const NotifyDetailScreen: React.FC<NotifyDetailProps> = ({ route }) => {
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.body}>
-                    <Text style={styles.title}>{title}</Text>
-                    <Text style={styles.content}>{content}</Text>
+                    <Text style={styles.title}>{notify.title}</Text>
+                    <Text style={styles.content}>{notify.content}</Text>
                 </View>
             </ScrollView>
         </View>
@@ -167,7 +162,7 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between', // This will space out the elements (title, avatar, close button)
+        justifyContent: 'space-between',
         marginBottom: 20,
     },
     avatar: {
@@ -221,6 +216,5 @@ const styles = StyleSheet.create({
         color: 'red',
     },
 });
-
 
 export default NotifyDetailScreen;

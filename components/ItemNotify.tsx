@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Animated } from 'react-native';
-import { ref, onValue, set } from 'firebase/database'; // Thêm 'set' để cập nhật giá trị trong Firebase
+import { ref as dbRef, onValue, set, getDatabase, get } from 'firebase/database';
 import { database } from '../firebaseConfig';
-import moment from 'moment';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,89 +9,65 @@ import { RootStackParamList } from '../type';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetailScreen'>;
 
-interface ItemNotifyProps {
-    idAnnouncer: string;
-    id: string;
-    title: string;
-    content: string;
-    createAt: string;
-    filter: boolean;
-    onReadPress: () => void;
+interface FilterData {
+    filterType: string;
+    departmentIds?: string[];
+    classIds?: string[];
+    userIds?: string[];
+    majorIds?: string[];
 }
 
-const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content, createAt, filter, onReadPress }) => {
-    const [announcer, setAnnouncer] = useState({ name: '', avatar: '' });
+interface ItemNotifyProps {
+    notifyId: string;
+    userId: string;
+    title: string;
+    content: string;
+    createAt: number;
+    filterData: FilterData;
+}
+
+const ItemNotify = React.forwardRef<View, ItemNotifyProps>((props, ref) => {
+    const { notifyId, userId, title, content, createAt, filterData } = props;
+    const [userName, setUserName] = useState('');
+    const [avatar, setAvatar] = useState('');
     const [isPinned, setIsPinned] = useState(false); // Trạng thái của pin
-    const [pinStatus, setPinStatus] = useState<boolean | null>(null);
     const [isRead, setIsRead] = useState(false);
+    const [loading, setLoading] = useState<boolean>(true);
+    const translateY = useRef(new Animated.Value(-20)).current;
+    const opacity = useRef(new Animated.Value(0)).current;
 
     const navigation = useNavigation<NavigationProp>();
 
     const currentUserId = getAuth().currentUser?.uid; // Lấy userId hiện tại
 
-    // Lấy thông tin từ Students
+    const containerRef = useRef<View>(null);
+
+    React.useImperativeHandle(ref, () => containerRef.current!, []);
+
+    // Lấy thông tin người gửi thông báo
     useEffect(() => {
-        const announcerRef = ref(database, `Users/${idAnnouncer}`);
-        const unsubscribe = onValue(announcerRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                setAnnouncer({
-                    name: data.studentName || 'Người thông báo',
-                    avatar: data.avatar || '',
-                });
-            } else {
-                console.log(`No data found for idAnnouncer: ${idAnnouncer}`);
-            }
-        });
+        const findAdminByUserId = async (userId: string) => {
+            const db = getDatabase();
+            const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
 
-        return () => unsubscribe();
-    }, [idAnnouncer]);
-
-    // Kiểm tra trạng thái đọc từ Firebase
-    useEffect(() => {
-        if (currentUserId) {
-            const readStatusRef = ref(database, `Actives/${currentUserId}/Notifies/Reads/${id}/status`);
-            const unsubscribeRead = onValue(readStatusRef, (snapshot) => {
-                const readStatus = snapshot.val();
-                setIsRead(!!readStatus); // true nếu đã đọc
-                console.log('LLLL', readStatus); 
-            });
-
-            return () => unsubscribeRead();
-        }
-    }, [currentUserId, id]);
-
-    // Đổi trạng thái "đọc thông báo"
-    const handleReadNotification = () => {
-        if (currentUserId) {
-            const readRef = ref(database, `Actives/${currentUserId}/Notifies/Reads/${id}/status`);
-            set(readRef, true) // Luôn đặt giá trị là true
-                .then(() => console.log(`Set read status to true for ${id}`))
-                .catch((error) => console.error("Error setting read status:", error));
-
-            navigation.navigate('NotifyDetailScreen', {idAnnouncer: idAnnouncer, id: id})
-        }
-    };
-
-    // Kiểm tra trạng thái pin trong Firebase
-    useEffect(() => {
-        if (currentUserId) {
-            const statusRef = ref(database, `Actives/${currentUserId}/Notifies/Pins/${id}`);
-            const unsubscribeStatus = onValue(statusRef, (snapshot) => {
-                const pinStatus = snapshot.val();
-                if (pinStatus !== null) {
-                    setPinStatus(pinStatus.status); // Cập nhật trạng thái pin
-                    setIsPinned(pinStatus.status); // Cập nhật trạng thái pin
+            for (const path of adminPaths) {
+                const adminRef = dbRef(db, `Admins/${path}/${userId}`);
+                const snapshot = await get(adminRef);
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    setUserName(data.fullName || 'No name');
+                    setAvatar(data.avatar || '');
+                    setLoading(false)
+                    return;
                 }
-            });
-
-            return () => unsubscribeStatus();
-        }
-    }, [currentUserId, id]);
+            }
+        };
+        
+        findAdminByUserId(userId);
+    }, [userId]);
 
     // Đổi icon dựa vào trạng thái pin
     const pinIcon = isPinned ? require('../icons/icon_pin_active.png') : require('../icons/icon_pin.png');
-
     const rotation = useRef(new Animated.Value(0)).current;
 
     // Bắt đầu animation khi component được render
@@ -121,7 +96,7 @@ const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content
         shakeAnimation.start();
 
         // Dừng animation khi component bị unmount
-        return 
+        return
     }, []);
 
     const animatedStyle = {
@@ -135,10 +110,12 @@ const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content
         ],
     };
 
-    const formatDate = (date: string) => {
-        const now = new Date();
-        const postDate = new Date(date);
-        const diffInSeconds = Math.floor((now.getTime() - postDate.getTime()) / 1000);
+    const formatDate = (timestamp: number) => {
+        console.log('timestamp', timestamp);
+        if (!timestamp || isNaN(timestamp)) return 'Thời gian không hợp lệ';
+
+        const now = Date.now();
+        const diffInSeconds = Math.floor((now - timestamp) / 1000);
         const diffInMinutes = Math.floor(diffInSeconds / 60);
         const diffInHours = Math.floor(diffInMinutes / 60);
         const diffInDays = Math.floor(diffInHours / 24);
@@ -149,25 +126,80 @@ const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content
         return `${diffInDays} ngày trước`;
     };
 
-    // Hàm xử lý sự kiện khi nhấn vào pin
-    const togglePinStatus = () => {
-        if (currentUserId) {
-            const statusRef = ref(database, `Actives/${currentUserId}/Notifies/Pins/${id}`);
-            const newStatus = !isPinned; // Đổi trạng thái pin
-            set(statusRef, { status: newStatus }) // Cập nhật trạng thái vào Firebase
-                .then(() => {
-                    setIsPinned(newStatus); // Cập nhật trạng thái pin trên UI
-                })
-                .catch((error) => {
-                    console.log("Error updating pin status: ", error);
-                });
+    useEffect(() => {
+        if (!loading) {
+            Animated.parallel([
+                Animated.timing(translateY, {
+                    toValue: 0,
+                    duration: 100,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(opacity, {
+                    toValue: 1,
+                    duration: 100,
+                    useNativeDriver: true,
+                }),
+            ]).start();
         }
+    }, [loading]);
+
+    // Kiểm tra trạng thái đọc của thông báo
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const readPath = dbRef(database, `Notifies/${userId}/${notifyId}/actives/reads/${currentUserId}`);
+        const unsubscribe = onValue(readPath, (snapshot) => {
+            setIsRead(!!snapshot.val());
+        });
+
+        return () => unsubscribe();
+    }, [currentUserId, notifyId, userId]);
+
+    // Xử lý read thông báo
+    const handleReadNotification = () => {
+        if (!currentUserId) return;
+
+        const readPath = dbRef(database, `Notifies/${userId}/${notifyId}/actives/reads/${currentUserId}`);
+        set(readPath, true)
+            .then(() => {
+                setIsRead(true);
+                navigation.navigate('NotifyDetailScreen', {
+                    userId: userId,
+                    notifyId: notifyId,
+                });
+            })
+            .catch((error) => console.error("Lỗi khi cập nhật trạng thái đọc:", error));
+    };
+
+    // Kiểm tra trạng thái gim của thông báo
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const pinPath = dbRef(database, `Notifies/${userId}/${notifyId}/actives/pins/${currentUserId}`);
+        const unsubscribe = onValue(pinPath, (snapshot) => {
+            const pinValue = snapshot.val();
+            setIsPinned(!!pinValue);
+        });
+
+        return () => unsubscribe();
+    }, [currentUserId, notifyId, userId]);
+
+    // Xử lý pin thông báo
+    const togglePinStatus = () => {
+        if (!currentUserId) return;
+
+        const pinRef = dbRef(database, `Notifies/${userId}/${notifyId}/actives/pins/${currentUserId}`);
+        const newStatus = !isPinned;
+
+        set(pinRef, newStatus)
+            .then(() => setIsPinned(newStatus))
+            .catch((err) => console.error('Lỗi khi cập nhật trạng thái pin:', err));
     };
 
     return (
-        <View style={{ alignItems: 'center' }}>
+        <View ref={containerRef} style={{ alignItems: 'center', width: '100%' }}>
             <View style={styles.pinContainer}>
-                <TouchableOpacity onPress={togglePinStatus}>
+                <TouchableOpacity onPress={() => { togglePinStatus(); }}>
                     <Image
                         source={pinIcon}
                         style={styles.pinIcon}
@@ -178,18 +210,21 @@ const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>
                         <Image
-                            source={{ uri: announcer.avatar }}
+                            source={{ uri: avatar }}
                             style={styles.avatar}
                         />
-                        <Text style={styles.announcer}>{announcer.name}</Text>
+                        <Text style={styles.announcer}>{userName}</Text>
                     </View>
-                    <Animated.Image
-                        source={require('../icons/icon_bell_animation.png')}
-                        style={[
-                            styles.icon,
-                            !isRead ? animatedStyle : {}, // Animation chỉ áp dụng khi chưa đọc
-                        ]}
-                    />
+                    <View style={{ position: 'relative' }}>
+                        <Animated.Image
+                            source={require('../icons/icon_bell_animation.png')}
+                            style={[
+                                styles.icon,
+                                !isRead ? animatedStyle : {}, // Animation nếu chưa đọc
+                            ]}
+                        />
+                        {!isRead && <View style={styles.badge} />}
+                    </View>
 
                 </View>
 
@@ -205,16 +240,17 @@ const ItemNotify: React.FC<ItemNotifyProps> = ({ id, idAnnouncer, title, content
                     </View>
                 </View>
 
-                <TouchableOpacity style={styles.readButton} onPress={handleReadNotification}>
+                <TouchableOpacity style={styles.readButton} onPress={() => { handleReadNotification(); }}>
                     <Text style={styles.readButtonText}>Đọc</Text>
                 </TouchableOpacity>
             </View>
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
+        width: '100%',
         backgroundColor: '#fff',
         borderRadius: 12,
         padding: 15,
@@ -223,6 +259,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+        marginBottom: 20,
     },
     pinContainer: {
         width: 70,
@@ -321,6 +358,19 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#fff',
     },
+    badge: {
+        position: 'absolute',
+        top: 3,
+        right: 4,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: 'red',
+        zIndex: 100,
+    },
+
 });
+
+ItemNotify.displayName = 'ItemNotify';
 
 export default ItemNotify;

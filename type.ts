@@ -7,7 +7,7 @@ export type RootStackParamList = {
   CommentScreen: { postId: string, userPostId: string, groupId: string };
   SearchFriend: undefined;
   FriendScreen: { userId: string };
-  NotifyDetailScreen: { idAnnouncer: string; id: string };
+  NotifyDetailScreen: { userId: string; notifyId: string };
   Message: undefined;
   MessageDetail: { userId: string };
   MessageActivity: undefined;
