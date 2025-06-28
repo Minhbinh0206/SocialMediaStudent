@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, FlatList, StyleSheet, LayoutAnimation } from 'react-native';
+import { View, FlatList, StyleSheet, LayoutAnimation, Text } from 'react-native';
 import Header from '../components/Header';
 import Navigation from '../components/Navigation';
 import ListEvent from '../components/ListEvent';
@@ -37,8 +37,7 @@ const Home: React.FC = () => {
             return;
         }
 
-        const postsRef = ref(database, 'Posts');
-
+        const postDefaultsRef = ref(database, 'PostDefaults');
         let unsubscribed = false;
 
         const fetchAndListen = async () => {
@@ -55,7 +54,7 @@ const Home: React.FC = () => {
                     return;
                 }
 
-                onValue(postsRef, (snapshot) => {
+                onValue(postDefaultsRef, (snapshot) => {
                     if (unsubscribed) return;
 
                     const data = snapshot.val();
@@ -65,35 +64,28 @@ const Home: React.FC = () => {
                         return;
                     }
 
-                    const loadedPosts: any[] = [];
+                    const loadedPosts = Object.entries(data)
+                        .map(([postId, post]: any) => {
+                            const filterData = post?.filterData;
+                            let shouldInclude = false;
 
-                    for (const groupId in data) {
-                        for (const userId in data[groupId]) {
-                            for (const postId in data[groupId][userId]) {
-                                const post = data[groupId][userId][postId];
-                                const filterData = post?.filterData;
-
-                                let shouldInclude = false;
-                                if (!filterData) {
-                                    shouldInclude = true;
-                                } else if (Array.isArray(filterData)) {
-                                    shouldInclude = filterData.includes(currentDepartmentId);
-                                }
-
-                                if (shouldInclude) {
-                                    loadedPosts.push({
-                                        id: postId,
-                                        postId,
-                                        userId,
-                                        groupId,
-                                        ...post,
-                                    });
-                                }
+                            if (!filterData || filterData.length === 0) {
+                                shouldInclude = true;
+                            } else if (Array.isArray(filterData)) {
+                                shouldInclude = filterData.includes(currentDepartmentId);
                             }
-                        }
-                    }
 
-                    loadedPosts.sort((a, b) => Number(b.createAt) - Number(a.createAt));
+                            if (!shouldInclude) return null;
+
+                            return {
+                                id: postId,
+                                postId,
+                                ...post,
+                            };
+                        })
+                        .filter(Boolean) // lọc null
+                        .sort((a, b) => Number(b.createAt) - Number(a.createAt));
+
                     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                     setPosts(loadedPosts);
                     setLoading(false);
@@ -109,9 +101,9 @@ const Home: React.FC = () => {
 
         return () => {
             unsubscribed = true;
-            off(postsRef);
+            off(postDefaultsRef);
         };
-    }, [pageName]); // ← chạy lại khi chuyển về home
+    }, [pageName]);
 
     const renderItem = ({ item }: { item: any }) => {
         return (
@@ -127,6 +119,8 @@ const Home: React.FC = () => {
                 ) : (
                     <>
                         <ListEvent />
+
+                        <Text style={styles.title}>Bài viết mới</Text>
                         <ListPost posts={posts} loading={loading} />
                     </>
                 )}
@@ -155,6 +149,12 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         backgroundColor: '#f0f0f0',
         borderRadius: 5,
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        margin: 15,
+        textAlign: 'left',
     },
 });
 

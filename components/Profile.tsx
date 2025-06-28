@@ -1,18 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, LayoutAnimation } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { getAuth } from 'firebase/auth';
 import database from '@react-native-firebase/database';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../type';
+import ListPost from './ListPost';
 
 const Profile = () => {
-    const [userData, setUserData] = useState<any>(null); // Lưu trữ dữ liệu người dùng
-    const [loading, setLoading] = useState(true); // Trạng thái tải dữ liệu
+    const [userData, setUserData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [myPostMark, setMyPostMark] = useState<any[]>([]);
     const currentUserId = getAuth().currentUser?.uid
     const [countFriends, setCountFriends] = useState(0);
     const [countFollowings, setCountFollowings] = useState(0);
     const [countFollowers, setCountFollowers] = useState(0);
+    const [departmentName, setDepartmentName] = useState('');
+    const [majorName, setMajorName] = useState('');
+    const [courseText, setCourseText] = useState('');
 
-    // Lấy CurrentUserId từ Firebase Auth và thông tin người dùng từ Firebase Database
+    useEffect(() => {
+        if (!userData) return;                        
+
+        const { departmentId, majorId, studentNumber } = userData;
+
+        if (departmentId) {
+            database()
+                .ref(`Departments/${departmentId}`)
+                .once('value')
+                .then(snap => {
+                    const dep = snap.val();
+                    setDepartmentName(dep?.departmentName ?? '');
+                });
+        }
+
+        if (departmentId && majorId) {
+            database()
+                .ref(`Departments/${departmentId}/majors/${majorId}`)
+                .once('value')
+                .then(snap => {
+                    const maj = snap.val();
+                    setMajorName(maj?.majorName ?? '');
+                });
+        }
+
+        if (studentNumber) {
+            const course = String(studentNumber).slice(0, 2); // VD: “21”
+            setCourseText(`Sinh viên khóa ${course}`);
+        }
+    }, [userData]);
+
     useEffect(() => {
         const fetchUserData = async () => {
             const userId = getAuth().currentUser?.uid; // Lấy CurrentUserId từ Firebase Auth
@@ -83,18 +120,57 @@ const Profile = () => {
         };
     }, [currentUserId]);
 
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const postDefaultsRef = database().ref('PostDefaults');
+
+        // Lắng nghe realtime để luôn cập nhật
+        const listener = postDefaultsRef.on('value', snap => {
+            const allData = snap.val();
+            const markedPosts: any[] = [];
+
+            if (allData) {
+                Object.entries(allData).forEach(([postId, post]: any) => {
+                    // Có thể là mảng hoặc object – xử lý cả hai
+                    const mark = post?.postMark?.userIds;
+                    const isMarked = Array.isArray(mark)
+                        ? mark.includes(currentUserId)
+                        : mark && Object.keys(mark).includes(currentUserId);
+
+                    if (isMarked) {
+                        markedPosts.push({
+                            id: postId,
+                            postId,
+                            ...post,
+                        });
+                    }
+                });
+            }
+
+            // Mới nhất lên đầu
+            markedPosts.sort((a, b) => Number(b.createAt) - Number(a.createAt));
+
+            // Hoạt ảnh mượt mà khi thay đổi
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setMyPostMark(markedPosts);
+            setLoading(false);
+        });
+
+        // Dọn dẹp listener khi unmount
+        return () => postDefaultsRef.off('value', listener);
+    }, [currentUserId]);
+
+    const iconPaths = {
+        department: require('../icons/icon_department.png'),
+        major: require('../icons/icon_major.png'),
+        course: require('../icons/icon_course.png'),
+    };
+
     if (loading) {
         return (
-            <View style={styles.container}>
-                <Text>Loading...</Text>
-            </View>
-        );
-    }
-
-    if (!userData) {
-        return (
-            <View style={styles.container}>
-                <Text>No user data found.</Text>
+            <View style={styles.loaderContainer}>
+                <ActivityIndicator size="large" color="#0000ff" />
             </View>
         );
     }
@@ -104,8 +180,9 @@ const Profile = () => {
             <View style={styles.header}>
                 <Image source={{ uri: userData.avatar }} style={styles.profileImage} />
                 <Text style={styles.name}>{userData.studentName}</Text>
-                <Text style={styles.bio}>{userData.bio || 'No bio available'}</Text>
+                <Text style={styles.bio}>{userData.studentNumber}</Text>
             </View>
+
             <View style={styles.statsContainer}>
                 <View style={styles.stat}>
                     <Text style={styles.statNumber}>{countFriends}</Text>
@@ -120,14 +197,71 @@ const Profile = () => {
                     <Text style={styles.statLabel}>Following</Text>
                 </View>
             </View>
+
             <View style={styles.postsContainer}>
                 <Text style={styles.postsTitle}>Giới thiệu</Text>
+            </View>
+
+            <View style={styles.introContainer}>
+                {!!departmentName && (
+                    <View style={styles.introRow}>
+                        <Image source={iconPaths.department} style={styles.icon} />
+                        <Text style={styles.introText}>Khoa: {departmentName}</Text>
+                    </View>
+                )}
+                {!!majorName && (
+                    <View style={styles.introRow}>
+                        <Image source={iconPaths.major} style={styles.icon} />
+                        <Text style={styles.introText}>Ngành: {majorName}</Text>
+                    </View>
+                )}
+                {!!courseText && (
+                    <View style={styles.introRow}>
+                        <Image source={iconPaths.course} style={styles.icon} />
+                        <Text style={styles.introText}>{courseText}</Text>
+                    </View>
+                )}
+            </View>
+
+            <View style={styles.postsContainer}>
+                <Text style={styles.postsTitle}>Đăng lại</Text>
+            </View>
+
+            <View style={{ paddingHorizontal: 15 }}>
+                <ListPost posts={myPostMark} loading={loading} />
             </View>
         </ScrollView>
     );
 };
 
 const styles = StyleSheet.create({
+    iconWrapper: {
+        marginRight: 8,
+    },
+    introContainer: {
+        paddingHorizontal: 15,
+        gap: 8,
+        marginBottom: 15
+    },
+    introRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    icon: {
+        width: 30,
+        height: 30,
+        marginRight: 10,
+    },
+    introText: {
+        fontSize: 16,
+        color: '#333',
+    },
+    loaderContainer: {
+        flex: 1,
+        height: 700,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     container: {
         flex: 1,
         backgroundColor: '#fff',
@@ -187,7 +321,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     postsContainer: {
-        padding: 20,
+        padding: 10,
+        paddingBottom: 5,
+        borderColor: '#ccc',
+        borderBottomWidth: 1,
+        borderTopWidth: 1,
+        marginBottom: 10
     },
     postsTitle: {
         fontSize: 18,

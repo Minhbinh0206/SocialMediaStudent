@@ -89,11 +89,6 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
                 source={require('../icons/icon_message.png')}
                 style={styles.iconImage}
               />
-              {messageCount > 0 && (
-                <View style={styles.badgeContainer}>
-                  <Text style={styles.badgeText}>{messageCount}</Text>
-                </View>
-              )}
             </TouchableOpacity>
             <Image source={getAvatar()} style={styles.avatar} />
           </View>
@@ -113,12 +108,6 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
       case 'group': // Trang nhóm
         return (
           <View style={styles.rightContainer}>
-            <TouchableOpacity>
-              <Image
-                source={require('../icons/icon_add.png')}
-                style={styles.iconImage}
-              />
-            </TouchableOpacity>
             <Image source={getAvatar()} style={styles.avatar} />
           </View>
         );
@@ -142,12 +131,6 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
       case 'profile': // Trang cá nhân
         return (
           <View style={styles.rightContainer}>
-            <TouchableOpacity>
-              <Image
-                source={require('../icons/icon_setting.png')}
-                style={styles.iconImage}
-              />
-            </TouchableOpacity>
             <TouchableOpacity onPress={handleLogout}>
               <Image
                 source={require('../icons/icon_logout_white.png')}

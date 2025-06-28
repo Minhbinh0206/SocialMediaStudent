@@ -8,6 +8,7 @@ import {
     UIManager,
     Animated,
     LayoutAnimation,
+    TouchableOpacity,
 } from 'react-native';
 import ItemPost from '../components/ItemPost';
 
@@ -19,6 +20,7 @@ interface Post {
     createAt: number;
     postImage: string[];
     postLike: { count: number; userIds: string[] };
+    postMark: { count: number; userIds: string[] };
 }
 
 interface ListPostProps {
@@ -65,59 +67,46 @@ const ListPost: React.FC<ListPostProps> = ({ posts, loading }) => {
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setVisibleCount((prev) => prev + 5);
             setIsLoadingMore(false);
-        }, 0); 
+        }, 0);
     };
 
     const visiblePosts = posts.slice(0, visibleCount);
 
-    const renderItem = ({ item }: { item: Post }) => (
-        <ItemPost
-            postId={item.postId}
-            groupId={item.groupId}
-            userPostId={item.userId}
-            content={item.content}
-            createAt={item.createAt}
-            postImage={item.postImage}
-            postLike={item.postLike}
-        />
-    );
-
     return (
         <View>
-            <Text style={styles.title}>Bài viết mới</Text>
-
             {loading ? (
-                <View style={{ paddingHorizontal: 16 }}>
+                <>
                     {[...Array(3)].map((_, index) => (
                         <Shimmer key={index} />
                     ))}
-                </View>
-            ) : (
-                <>
-                    <FlatList
-                        data={visiblePosts}
-                        keyExtractor={(item) => `post_${item.postId}`}
-                        renderItem={renderItem}
-                        showsVerticalScrollIndicator={false}
-                        ListEmptyComponent={
-                            <Text style={styles.emptyText}>Không có bài viết</Text>
-                        }
-                    />
-                    {/* Nếu còn bài chưa hiển thị, thì hiện nút Xem thêm */}
-
-                    {isLoadingMore ? (
-                        <View style={{ paddingHorizontal: 16 }}>
-                            {[...Array(2)].map((_, index) => (
-                                <Shimmer key={`loadmore-${index}`} />
-                            ))}
-                        </View>
-                    ) : visibleCount < posts.length ? (
-                        <Text style={styles.loadMoreText} onPress={handleLoadMore}>
-                            Xem thêm...
-                        </Text>
-                    ) : null}
                 </>
+            ) : posts.length === 0 ? (
+                <Text style={styles.emptyText}>Không có bài viết</Text>
+            ) : (
+                visiblePosts.map((item) => (
+                    <ItemPost
+                        key={`post_${item.postId}`}
+                        postId={item.postId}
+                        groupId={item.groupId}
+                        userPostId={item.userId}
+                        content={item.content}
+                        createAt={item.createAt}
+                        postImage={item.postImage}
+                        postLike={item.postLike}
+                        postMark={item.postMark}
+                    />
+                ))
             )}
+
+            {isLoadingMore ? (
+                [...Array(2)].map((_, index) => (
+                    <Shimmer key={`loadmore-${index}`} />
+                ))
+            ) : visibleCount < posts.length ? (
+                <TouchableOpacity onPress={handleLoadMore}>
+                    <Text style={styles.loadMoreText}>Xem thêm...</Text>
+                </TouchableOpacity>
+            ) : null}
         </View>
     );
 };
@@ -129,12 +118,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 16,
         marginBottom: 20
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        margin: 15,
-        textAlign: 'left',
     },
     shimmer: {
         height: 150,

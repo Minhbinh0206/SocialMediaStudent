@@ -1,75 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, TouchableHighlight, ActivityIndicator } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, LayoutAnimation } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import database from '@react-native-firebase/database';
 import { getAuth } from 'firebase/auth';
+import ListPost from './ListPost';
 
 interface FriendProfileProps {
-    userId: string; // Nhận userId từ props
+    userId: string;
 }
-
 const FriendProfile = ({ userId }: FriendProfileProps) => {
-    const [userData, setUserData] = useState<any>(null); // Lưu trữ dữ liệu người dùng
-    const [loading, setLoading] = useState(true); // Trạng thái tải dữ liệu
-    const currentUserId = getAuth().currentUser?.uid
+    const [userData, setUserData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const currentUserId = getAuth().currentUser?.uid;
     const [textStatusFriend, setTextStatusFriend] = useState('Theo dõi');
-    const [buttonColor, setButtonColor] = useState('#007bff'); // Mặc định màu xanh dương
+    const [buttonColor, setButtonColor] = useState('#007bff');
     const [countFriends, setCountFriends] = useState(0);
     const [countFollowings, setCountFollowings] = useState(0);
     const [countFollowers, setCountFollowers] = useState(0);
+    const [departmentName, setDepartmentName] = useState('');
+    const [majorName, setMajorName] = useState('');
+    const [courseText, setCourseText] = useState('');
+    const [friendPostMark, setFriendPostMark] = useState<any[]>([]);
 
-    // Lấy thông tin người dùng từ Firebase Database bằng userId
     useEffect(() => {
         const fetchUserData = async () => {
-            console.log('User ID passed:', userId); // Log userId nhận được
-
             if (userId) {
                 const studentsRef = database().ref('Users');
                 studentsRef.once('value', snapshot => {
                     const studentsData = snapshot.val();
-
                     if (studentsData) {
                         const studentList = Object.values(studentsData);
                         const userFriend = studentList.find((student: any) => student.userId === userId);
-                        console.log('Found User:', userFriend); // Log người dùng tìm thấy
-
                         if (userFriend) {
-                            setUserData(userFriend); // Lưu thông tin người dùng vào state
+                            setUserData(userFriend);
                         }
                     }
-                    setLoading(false); // Dữ liệu đã được tải
+                    setLoading(false);
                 });
             }
         };
-
         fetchUserData();
-    }, [userId]); // Khi userId thay đổi, useEffect sẽ chạy lại
+    }, [userId]);
 
-    // Lấy thông tin người dùng từ Firebase Database bằng userId
     useEffect(() => {
-        const checkFriendStatus = () => {
-            if (userId && currentUserId) {
-                const myRef = database().ref(`Friends/${currentUserId}/${userId}`);
-                const yourRef = database().ref(`Friends/${userId}/${currentUserId}`);
+        if (userId && currentUserId) {
+            const myRef = database().ref(`Friends/${currentUserId}/${userId}`);
+            const yourRef = database().ref(`Friends/${userId}/${currentUserId}`);
 
-                myRef.on('value', (mySnapshot) => {
-                    yourRef.on('value', (yourSnapshot) => {
-                        let myStatus = 0;
-                        let yourStatus = 0;
+            const onStatusChange = () => {
+                myRef.on('value', mySnapshot => {
+                    yourRef.on('value', yourSnapshot => {
+                        const myStatus = mySnapshot.val()?.status ?? 0;
+                        const yourStatus = yourSnapshot.val()?.status ?? 0;
 
-                        if (mySnapshot.exists()) {
-                            myStatus = mySnapshot.val().status;
-                        } else {
-                            myRef.set({ status: 0 });
-                        }
-
-                        if (yourSnapshot.exists()) {
-                            yourStatus = yourSnapshot.val().status;
-                        } else {
-                            yourRef.set({ status: 0 });
-                        }
-
-                        // Xác định trạng thái và màu sắc
                         if (myStatus === 0 && yourStatus === 0) {
                             setTextStatusFriend('Theo dõi');
                             setButtonColor('#007bff');
@@ -85,95 +68,144 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
                         }
                     });
                 });
-            }
-        };
+            };
 
-        checkFriendStatus();
+            onStatusChange();
 
-        // Cleanup listener
-        return () => {
-            const myRef = database().ref(`Friends/${currentUserId}/${userId}`);
-            const yourRef = database().ref(`Friends/${userId}/${currentUserId}`);
-            myRef.off();
-            yourRef.off();
-        };
+            // Cleanup listener khi unmount
+            return () => {
+                myRef.off();
+                yourRef.off();
+            };
+        }
     }, [userId, currentUserId]);
+
+    useEffect(() => {
+        if (!userId) return;
+
+        const postDefaultsRef = database().ref('PostDefaults');
+
+        // Lắng nghe realtime để luôn cập nhật
+        const listener = postDefaultsRef.on('value', snap => {
+            const allData = snap.val();
+            const markedPosts: any[] = [];
+
+            if (allData) {
+                Object.entries(allData).forEach(([postId, post]: any) => {
+                    // Có thể là mảng hoặc object – xử lý cả hai
+                    const mark = post?.postMark?.userIds;
+                    const isMarked = Array.isArray(mark)
+                        ? mark.includes(userId)
+                        : mark && Object.keys(mark).includes(userId);
+
+                    if (isMarked) {
+                        markedPosts.push({
+                            id: postId,
+                            postId,
+                            ...post,
+                        });
+                    }
+                });
+            }
+
+            // Mới nhất lên đầu
+            markedPosts.sort((a, b) => Number(b.createAt) - Number(a.createAt));
+
+            // Hoạt ảnh mượt mà khi thay đổi
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setFriendPostMark(markedPosts);
+            setLoading(false);
+        });
+
+        // Dọn dẹp listener khi unmount
+        return () => postDefaultsRef.off('value', listener);
+    }, [currentUserId]);
 
     const handleFollowFriend = async () => {
         if (userId && currentUserId) {
-            // Tham chiếu đến đường dẫn của cả hai người dùng
-            const myRef = database().ref(`Friends/${currentUserId}/${userId}`);
-            const yourRef = database().ref(`Friends/${userId}/${currentUserId}`);
+            const [mySnap, yourSnap] = await Promise.all([
+                database().ref(`Friends/${currentUserId}/${userId}`).once('value'),
+                database().ref(`Friends/${userId}/${currentUserId}`).once('value'),
+            ]);
 
-            // Lấy dữ liệu từ Firebase
-            const mySnapshot = await myRef.once('value');
-            const yourSnapshot = await yourRef.once('value');
+            const myStatus = mySnap.val()?.status ?? 0;
 
-            let myStatus = mySnapshot.val().status;
-
-            // Xử lý các trường hợp và log kết quả
             if (myStatus === 0) {
-                await myRef.set({ status: 1 });
-                await yourRef.set({ status: 2 });
-
-                setTextStatusFriend('Đang theo dõi')
+                await database().ref().update({
+                    [`Friends/${currentUserId}/${userId}/status`]: 1,
+                    [`Friends/${userId}/${currentUserId}/status`]: 2,
+                });
+                setTextStatusFriend('Đang theo dõi');
+                setButtonColor('#CCCCCC');
             } else if (myStatus === 1) {
-                await myRef.set({ status: 0 });
-                await yourRef.set({ status: 0 });
-
-                setTextStatusFriend('Theo dõi')
+                await database().ref().update({
+                    [`Friends/${currentUserId}/${userId}/status`]: 0,
+                    [`Friends/${userId}/${currentUserId}/status`]: 0,
+                });
+                setTextStatusFriend('Theo dõi');
+                setButtonColor('#007bff');
             } else if (myStatus === 2) {
-                await myRef.set({ status: 3 });
-                await yourRef.set({ status: 3 });
-
-                setTextStatusFriend('Bạn bè')
+                await database().ref().update({
+                    [`Friends/${currentUserId}/${userId}/status`]: 3,
+                    [`Friends/${userId}/${currentUserId}/status`]: 3,
+                });
+                setTextStatusFriend('Bạn bè');
+                setButtonColor('#00CC00');
             } else if (myStatus === 3) {
-                console.log('Comming Soon');
+                console.log('Đã là bạn bè');
             }
         }
-    }
+    };
 
-    // Lấy thông tin các số lượng
     useEffect(() => {
-        const countNumber = () => {
-            if (userId) {
-                const yourRef = database().ref(`Friends/${userId}`);
+        if (!userData) return;
 
-                yourRef.on('value', (yourSnapshot) => {
-                    let countFollowers = 0;
-                    let countFollowings = 0;
-                    let countFriends = 0;
+        const { departmentId, majorId, studentNumber } = userData;
 
-                    if (yourSnapshot.exists()) {
-                        const data = yourSnapshot.val();
+        if (departmentId) {
+            database()
+                .ref(`Departments/${departmentId}`)
+                .once('value')
+                .then(snap => {
+                    const dep = snap.val();
+                    setDepartmentName(dep?.departmentName ?? '');
+                });
+        }
 
-                        // Lặp qua tất cả trạng thái của người dùng
-                        Object.values(data).forEach((item: any) => {
-                            if (item.status === 1) {
-                                countFollowings++; // Đang theo dõi
-                            } else if (item.status === 2) {
-                                countFollowers++; // Người theo dõi
-                            } else if (item.status === 3) {
-                                countFriends++; // Bạn bè
-                            }
-                        });
-                    }
+        if (departmentId && majorId) {
+            database()
+                .ref(`Departments/${departmentId}/majors/${majorId}`)
+                .once('value')
+                .then(snap => {
+                    const maj = snap.val();
+                    setMajorName(maj?.majorName ?? '');
+                });
+        }
 
-                    // Set state cho từng trạng thái
-                    setCountFollowings(countFollowings);
-                    setCountFollowers(countFollowers);
-                    setCountFriends(countFriends);
+        if (studentNumber) {
+            const course = String(studentNumber).slice(0, 2); // VD: “21”
+            setCourseText(`Sinh viên khóa ${course}`);
+        }
+    }, [userData]);
+
+    useEffect(() => {
+        const yourRef = database().ref(`Friends/${userId}`);
+        yourRef.on('value', (snapshot) => {
+            let followers = 0, followings = 0, friends = 0;
+            const data = snapshot.val();
+            if (data) {
+                Object.values(data).forEach((item: any) => {
+                    if (item.status === 1) followings++;
+                    else if (item.status === 2) followers++;
+                    else if (item.status === 3) friends++;
                 });
             }
-        };
+            setCountFollowers(followers);
+            setCountFollowings(followings);
+            setCountFriends(friends);
+        });
 
-        countNumber();
-
-        // Cleanup listener
-        return () => {
-            const yourRef = database().ref(`Friends/${userId}`);
-            yourRef.off();
-        };
+        return () => yourRef.off();
     }, [userId]);
 
     if (loading) {
@@ -187,11 +219,16 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
     if (!userData) {
         return (
             <View style={styles.container}>
-                <Text>No user data found.</Text>
+                <Text>Không tìm thấy người dùng.</Text>
             </View>
         );
     }
 
+    const iconPaths = {
+        department: require('../icons/icon_department.png'),
+        major: require('../icons/icon_major.png'),
+        course: require('../icons/icon_course.png'),
+    };
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
@@ -211,8 +248,8 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
                         {textStatusFriend}
                     </Text>
                 </TouchableOpacity>
-
             </View>
+
             <View style={styles.statsContainer}>
                 <View style={styles.stat}>
                     <Text style={styles.statNumber}>{countFriends}</Text>
@@ -230,13 +267,62 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
 
             <View style={styles.postsContainer}>
                 <Text style={styles.postsTitle}>Giới thiệu</Text>
-                <Text style={styles.bio}>{userData.bio || 'No bio available'}</Text>
+            </View>
+
+            <View style={styles.introContainer}>
+                {!!departmentName && (
+                    <View style={styles.introRow}>
+                        <Image source={iconPaths.department} style={styles.icon} />
+                        <Text style={styles.introText}>Khoa: {departmentName}</Text>
+                    </View>
+                )}
+                {!!majorName && (
+                    <View style={styles.introRow}>
+                        <Image source={iconPaths.major} style={styles.icon} />
+                        <Text style={styles.introText}>Ngành: {majorName}</Text>
+                    </View>
+                )}
+                {!!courseText && (
+                    <View style={styles.introRow}>
+                        <Image source={iconPaths.course} style={styles.icon} />
+                        <Text style={styles.introText}>{courseText}</Text>
+                    </View>
+                )}
+            </View>
+
+            <View style={styles.postsContainer}>
+                <Text style={styles.postsTitle}>Đăng lại</Text>
+            </View>
+
+            <View style={{ paddingHorizontal: 15 }}>
+                <ListPost posts={friendPostMark} loading={loading} />
             </View>
         </ScrollView>
     );
 };
 
 const styles = StyleSheet.create({
+    iconWrapper: {
+        marginRight: 8,
+    },
+    introContainer: {
+        paddingHorizontal: 15,
+        gap: 8,
+        marginBottom: 15
+    },
+    introRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    icon: {
+        width: 30,
+        height: 30,
+        marginRight: 10,
+    },
+    introText: {
+        fontSize: 16,
+        color: '#333',
+    },
     loaderContainer: {
         flex: 1,
         height: 700,
@@ -286,31 +372,19 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
     },
-    buttonsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingVertical: 10,
-        paddingHorizontal: 20
-    },
     postsContainer: {
-        padding: 20,
+        padding: 10,
+        paddingHorizontal: 20,
+        paddingBottom: 5,
+        borderColor: '#ccc',
+        borderBottomWidth: 1,
+        borderTopWidth: 1,
+        marginBottom: 10
     },
     postsTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 10,
-    },
-    post: {
-        marginBottom: 20,
-    },
-    postImage: {
-        width: '100%',
-        height: 200,
-        borderRadius: 10,
-    },
-    postDescription: {
-        fontSize: 16,
-        marginTop: 10,
     },
 });
 

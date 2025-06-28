@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, FlatList, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, TextInput, FlatList, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
 import database from '@react-native-firebase/database';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
+import { getAuth } from 'firebase/auth';
 
 // Define the navigation prop type
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'SearchFriend'>;
@@ -12,25 +13,26 @@ const SearchFriend = () => {
     const [searchQuery, setSearchQuery] = useState(''); // Lưu trữ truy vấn tìm kiếm
     const [results, setResults] = useState<any[]>([]); // Lưu trữ kết quả tìm kiếm
     const [allStudents, setAllStudents] = useState<any[]>([]); // Lưu trữ toàn bộ danh sách sinh viên
+    const currentUserId = getAuth().currentUser?.uid;   // gắn ngay sau khai báo state
 
-  const navigation = useNavigation<NavigationProp>(); // Type the navigation object
+    const navigation = useNavigation<NavigationProp>(); // Type the navigation object
 
-        // Lấy dữ liệu từ Firebase Realtime Database
-        useEffect(() => {
-            const fetchData = async () => {
-                const studentsRef = database().ref('Users');
-                studentsRef.once('value', snapshot => {
-                    const studentsData = snapshot.val();
-                    if (studentsData) {
-                        const studentList = Object.values(studentsData); // Chuyển đổi dữ liệu thành mảng
-                        setAllStudents(studentList); // Lưu toàn bộ danh sách sinh viên vào state allStudents
-                        setResults(studentList); // Lưu kết quả ban đầu là toàn bộ sinh viên
-                    }
-                });
-            };
+    // Lấy dữ liệu từ Firebase Realtime Database
+    useEffect(() => {
+        const fetchData = async () => {
+            const studentsRef = database().ref('Users');
+            studentsRef.once('value', snapshot => {
+                const studentsData = snapshot.val();
+                if (studentsData) {
+                    const studentList = Object.values(studentsData); // Chuyển đổi dữ liệu thành mảng
+                    setAllStudents(studentList); // Lưu toàn bộ danh sách sinh viên vào state allStudents
+                    setResults(studentList); // Lưu kết quả ban đầu là toàn bộ sinh viên
+                }
+            });
+        };
 
-            fetchData();
-        }, []);
+        fetchData();
+    }, []);
 
     // Hàm xử lý tìm kiếm và lọc dữ liệu theo tên hoặc mã sinh viên
     const handleSearch = (query: string) => {
@@ -76,20 +78,34 @@ const SearchFriend = () => {
                 <FlatList
                     data={results}
                     keyExtractor={(item, index) => index.toString()}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity onPress={() => navigation.navigate('FriendScreen', { userId: item.userId })}>
-                            <View style={styles.resultItem}>
-                                {/* Avatar */}
-                                <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                    renderItem={({ item }) => {
+                        const isMe = item.userId === currentUserId;
 
-                                {/* Thông tin sinh viên */}
-                                <View style={styles.infoContainer}>
-                                    <Text style={styles.resultText}>{item.studentName}</Text>
-                                    <Text style={styles.studentId}>{item.studentNumber}</Text>
+                        return (
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (isMe) {
+                                        Alert.alert('Thông báo', 'Đây là tài khoản của bạn.'); 
+                                        return;
+                                    } else {
+                                        navigation.navigate('FriendScreen', { userId: item.userId });
+                                    }
+                                }}
+                            >
+                                <View style={styles.resultItem}>
+                                    <Image source={{ uri: item.avatar }} style={styles.avatar} />
+
+                                    <View style={styles.infoContainer}>
+                                        <Text style={styles.resultText}>
+                                            {isMe ? 'Bạn' : item.studentName}
+                                        </Text>
+                                        <Text style={styles.studentId}>{item.studentNumber}</Text>
+                                    </View>
                                 </View>
-                            </View>
-                        </TouchableOpacity>
-                    )}
+                            </TouchableOpacity>
+                        );
+                    }}
+
                 />
             )}
         </View>

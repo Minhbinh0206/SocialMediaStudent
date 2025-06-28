@@ -62,16 +62,9 @@ const Message = () => {
                     />
                 </TouchableOpacity>
                 <Text style={styles.userName}>{userName}</Text>
-                <TouchableOpacity>
-                    <Image
-                        source={require('../icons/icon_add_message.png')}
-                        style={styles.iconAdd}
-                    />
-                </TouchableOpacity>
             </View>
             {/* Danh sách tin nhắn */}
             <View style={styles.listContainer}>
-                <ListNote />
                 <ListFriendsMessage />
             </View>
         </View>

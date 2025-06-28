@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Platform, UIManager, Animated, useWindowDimensions } from 'react-native';
-import { getDatabase, ref, onValue, set, get } from 'firebase/database';
+import { getDatabase, ref, onValue, set, get, update } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,6 +21,7 @@ interface PostProps {
   createAt: number;
   postImage: string[];
   postLike: { count: number; userIds: string[] };
+  postMark: { count: number; userIds: string[] };
   groupId: string;
 }
 
@@ -40,13 +41,16 @@ const ItemPost: React.FC<PostProps> = ({
   createAt,
   postImage,
   postLike,
+  postMark,
   groupId
 }) => {
   const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [avatar, setAvatar] = useState<string>('');
   const [liked, setLiked] = useState<boolean>(false);
+  const [marked, setMarked] = useState<boolean>(false);
   const [likeCount, setLikeCount] = useState<number>(postLike?.count || 0);
+  const [markCount, setMarkCount] = useState<number>(postMark?.count || 0);
   const [commentCount, setCommentCount] = useState<number>(0);
   const currentUserId = getAuth().currentUser?.uid ?? '';
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -55,6 +59,7 @@ const ItemPost: React.FC<PostProps> = ({
   const opacity = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
   const [showFullContent, setShowFullContent] = useState(false);
+  const [isAdmin, setAdmin] = useState<boolean>(false);
 
   useEffect(() => {
     const db = getDatabase();
@@ -68,6 +73,24 @@ const ItemPost: React.FC<PostProps> = ({
       } else {
         setLikeCount(0);
         setLiked(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [groupId, userPostId, postId, currentUserId]);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const postMarkRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/postMark`);
+
+    const unsubscribe = onValue(postMarkRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setMarkCount(data.count || 0);
+        setMarked(data.userIds?.includes(currentUserId) || false);
+      } else {
+        setMarkCount(0);
+        setMarked(false);
       }
     });
 
@@ -112,30 +135,97 @@ const ItemPost: React.FC<PostProps> = ({
 
   const handlePress = async () => {
     const db = getDatabase();
-    const postRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/postLike`);
+    const likePath = `Posts/${groupId}/${userPostId}/${postId}/postLike`;
+    const defaultPath = `PostDefaults/${postId}/postLike`;
 
     try {
-      const snapshot = await get(postRef);
-      let currentPostLike = snapshot.val() || { count: 0, userIds: [] };
-      const newLikeStatus = !liked;
+      // B1: kiểm tra người đăng có phải admin không
+      const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+      let isAdmin = false;
 
-      let updatedUserIds = [...(currentPostLike.userIds || [])];
-      if (newLikeStatus) {
-        if (!updatedUserIds.includes(currentUserId)) {
-          updatedUserIds.push(currentUserId);
+      for (const path of adminPaths) {
+        const adminRef = ref(db, `Admins/${path}/${userPostId}`);
+        const snap = await get(adminRef);
+        if (snap.exists()) {
+          isAdmin = true;
+          break;
         }
-      } else {
-        updatedUserIds = updatedUserIds.filter(id => id !== currentUserId);
       }
 
-      const newPostLike = {
-        count: updatedUserIds.length,
-        userIds: updatedUserIds,
-      };
+      // B2: đọc dữ liệu like hiện tại
+      const snap = await get(ref(db, likePath));
+      const current = snap.val() || { count: 0, userIds: [] };
 
-      await set(postRef, newPostLike);
-    } catch (error) {
-      console.error('Error updating like:', error);
+      const newLiked = !liked;
+      let userIds = [...current.userIds];
+
+      if (newLiked) {
+        if (!userIds.includes(currentUserId)) userIds.push(currentUserId);
+      } else {
+        userIds = userIds.filter(id => id !== currentUserId);
+      }
+
+      const newPostLike = { count: userIds.length, userIds };
+
+      // B3: cập nhật like
+      const updates: any = {};
+      updates[likePath] = newPostLike;
+
+      if (isAdmin) {
+        updates[defaultPath] = newPostLike;
+      }
+
+      await update(ref(db), updates);
+    } catch (err) {
+      console.error('Error updating like:', err);
+    }
+  };
+
+  const handlePressMark = async () => {
+    const db = getDatabase();
+    const likePath = `Posts/${groupId}/${userPostId}/${postId}/postMark`;
+    const defaultPath = `PostDefaults/${postId}/postMark`;
+
+    try {
+      // B1: kiểm tra người đăng có phải admin không
+      const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+      let isAdmin = false;
+
+      for (const path of adminPaths) {
+        const adminRef = ref(db, `Admins/${path}/${userPostId}`);
+        const snap = await get(adminRef);
+        if (snap.exists()) {
+          isAdmin = true;
+          break;
+        }
+      }
+
+      // B2: đọc dữ liệu like hiện tại
+      const snap = await get(ref(db, likePath));
+      const current = snap.val() || { count: 0, userIds: [] };
+
+      const newMark = !marked;
+      let userIds = [...current.userIds];
+
+      if (newMark) {
+        if (!userIds.includes(currentUserId)) userIds.push(currentUserId);
+      } else {
+        userIds = userIds.filter(id => id !== currentUserId);
+      }
+
+      const newPostMark = { count: userIds.length, userIds };
+
+      // B3: cập nhật like
+      const updates: any = {};
+      updates[likePath] = newPostMark;
+
+      if (isAdmin) {
+        updates[defaultPath] = newPostMark;
+      }
+
+      await update(ref(db), updates);
+    } catch (err) {
+      console.error('Error updating like:', err);
     }
   };
 
@@ -143,7 +233,7 @@ const ItemPost: React.FC<PostProps> = ({
     navigation.navigate('CommentScreen', { postId, userPostId, groupId });
   };
 
-  const findAdminByUserId = async (userId: string) => {
+  const findAdminOrStudentByUserId = async (userId: string) => {
     const db = getDatabase();
     const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
 
@@ -155,26 +245,39 @@ const ItemPost: React.FC<PostProps> = ({
         setUserName(data.fullName || 'No name');
         setAvatar(data.avatar || '');
         setLoading(false);
+        setAdmin(true);
         return;
       }
+    }
+
+    // Không tìm thấy trong Admins → kiểm tra Users
+    const userRef = ref(db, `Users/${userId}`);
+    const userSnap = await get(userRef);
+    if (userSnap.exists()) {
+      const data = userSnap.val();
+      setUserName(data.studentName || 'No name');
+      setAvatar(data.avatar || '');
+    } else {
+      setUserName('Không tìm thấy người dùng');
+      setAvatar('');
     }
 
     setLoading(false);
   };
 
   useEffect(() => {
-    findAdminByUserId(userPostId);
+    findAdminOrStudentByUserId(userPostId);
   }, [userPostId]);
 
   const iconPaths = {
     like: require('../icons/icon_like.png'),
     like_active: require('../icons/icon_like_active.png'),
     comment: require('../icons/icon_comment.png'),
-    share: require('../icons/icon_share.png'),
+    mark: require('../icons/icon_mark.png'),
+    mark_active: require('../icons/icon_mark_active.png'),
   };
 
   const formatDate = (timestamp: number) => {
-    console.log('timestamp', timestamp);
     if (!timestamp || isNaN(timestamp)) return 'Thời gian không hợp lệ';
 
     const now = Date.now();
@@ -270,7 +373,6 @@ const ItemPost: React.FC<PostProps> = ({
         </View>
       )}
 
-
       <View style={styles.footer}>
         <TouchableOpacity style={styles.actionButton} onPress={handlePress}>
           <Image source={liked ? iconPaths.like_active : iconPaths.like} style={styles.icon} />
@@ -280,10 +382,12 @@ const ItemPost: React.FC<PostProps> = ({
           <Image source={iconPaths.comment} style={styles.icon} />
           <Text style={styles.actionText}>{commentCount}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Image source={iconPaths.share} style={styles.icon} />
-          <Text style={styles.actionText}>0</Text>
-        </TouchableOpacity>
+        {isAdmin && (
+          <TouchableOpacity style={styles.actionButton} onPress={handlePressMark}>
+            <Image source={marked ? iconPaths.mark_active : iconPaths.mark} style={styles.iconMark} />
+            <Text style={styles.actionText}>{markCount}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Animated.View>
   );
@@ -298,7 +402,7 @@ const styles = StyleSheet.create({
   },
   postCard: {
     padding: 15,
-    marginBottom: 20,
+    marginBottom: 10,
     backgroundColor: '#fff',
     borderRadius: 15,
     borderWidth: 1,
@@ -349,6 +453,11 @@ const styles = StyleSheet.create({
   icon: {
     width: 20,
     height: 20,
+    marginRight: 10,
+  },
+  iconMark: {
+    width: 16,
+    height: 16,
     marginRight: 10,
   },
   leftArrow: {

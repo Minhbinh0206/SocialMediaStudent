@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
-import { getDatabase, ref, get, set, query, orderByChild, equalTo, onValue, push, child } from 'firebase/database';
+import { getDatabase, ref, get, set, query, orderByChild, equalTo, onValue, push, child, update } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../type'; // Đảm bảo import đúng RootStackParamList
@@ -69,30 +69,33 @@ const CommentScreen = () => {
 
   const handlePress = async () => {
     const db = getDatabase();
-    const postRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/postLike`);
+    const likePath = `Posts/${groupId}/${userPostId}/${postId}/postLike`;
+    const defaultPath = `PostDefaults/${postId}/postLike`;
 
     try {
-      const snapshot = await get(postRef);
-      let currentPostLike = snapshot.val() || { count: 0, userIds: [] };
-      const newLikeStatus = !liked;
+      // lấy like hiện tại (đọc ở path chính, đủ rồi)
+      const snap = await get(ref(db, likePath));
+      const current = snap.val() || { count: 0, userIds: [] };
 
-      let updatedUserIds = [...(currentPostLike.userIds || [])];
-      if (newLikeStatus) {
-        if (!updatedUserIds.includes(currentUserId)) {
-          updatedUserIds.push(currentUserId);
-        }
+      const newLiked = !liked;
+      let userIds = [...current.userIds];
+
+      if (newLiked) {
+        if (!userIds.includes(currentUserId)) userIds.push(currentUserId);
       } else {
-        updatedUserIds = updatedUserIds.filter(id => id !== currentUserId);
+        userIds = userIds.filter(id => id !== currentUserId);
       }
 
-      const newPostLike = {
-        count: updatedUserIds.length,
-        userIds: updatedUserIds,
-      };
+      const newPostLike = { count: userIds.length, userIds };
 
-      await set(postRef, newPostLike);
-    } catch (error) {
-      console.error('Error updating like:', error);
+      /* 🔥 cập nhật CÙNG LÚC hai nút */
+      await update(ref(db), {
+        [likePath]: newPostLike,
+        [defaultPath]: newPostLike,
+      });
+
+    } catch (err) {
+      console.error('Error updating like:', err);
     }
   };
 
@@ -261,63 +264,73 @@ const CommentScreen = () => {
     }
   };
 
-
   const handleComment = async () => {
     if (!commentText.trim()) return;
+    const db = getDatabase();
 
-    if (tag != null) {
-      // Xử lý khi có tag
-      const db = getDatabase();
-      const replyRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/commentData/${tag.commentId}/replies/replyData`);
-      const newReplyRef = push(replyRef);
+    /* ---------- xác định path gốc ---------- */
+    const commentRoot = `Posts/${groupId}/${userPostId}/${postId}/comments`;
+    const defaultRoot = `PostDefaults/${postId}/comments`;
 
+    /* ---------- REPLY ---------- */
+    if (tag) {
+      const replyListPath = `${commentRoot}/commentData/${tag.commentId}/replies/replyData`;
+      const newReplyRef = push(ref(db, replyListPath));   // tạo key 1 lần
+      const replyId = newReplyRef.key!;
       const replyData = {
         content: commentText,
         createdAt: Date.now(),
         replyLike: 0,
-        replyId: newReplyRef.key || '',
-        userReplyId: currentUserId || '',
+        replyId,
+        userReplyId: currentUserId,
       };
 
-      await set(newReplyRef, replyData);
+      /* count hiện tại (đọc 1 lần) */
+      const countSnap = await get(ref(db, `${commentRoot}/commentData/${tag.commentId}/replies/count`));
+      const current = countSnap.exists() ? countSnap.val() : 0;
+      const newCount = current + 1;
 
-      // Cập nhật lại count
-      const countRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/commentData/${tag.commentId}/replies/count`);
-      await get(countRef).then(snapshot => {
-        const currentCount = snapshot.exists() ? snapshot.val() : 0;
-        set(countRef, currentCount + 1);
+      /* 🔥 ghi song song 2 nhánh */
+      await update(ref(db), {
+        [`${replyListPath}/${replyId}`]: replyData,
+        [`${defaultRoot}/commentData/${tag.commentId}/replies/replyData/${replyId}`]: replyData,
+
+        [`${commentRoot}/commentData/${tag.commentId}/replies/count`]: newCount,
+        [`${defaultRoot}/commentData/${tag.commentId}/replies/count`]: newCount,
       });
 
       setTag(null);
     }
-    else {
-      const db = getDatabase();
-      const commentDataRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/commentData`);
-      const newCommentRef = push(commentDataRef); // Đẩy vào commentData
 
+    /* ---------- COMMENT MỚI ---------- */
+    else {
+      const commentListPath = `${commentRoot}/commentData`;
+      const newCommentRef = push(ref(db, commentListPath));
+      const commentId = newCommentRef.key!;
       const commentData = {
-        userCommentId: currentUserId || '',
-        commentId: newCommentRef.key || '',
+        userCommentId: currentUserId,
+        commentId,
         content: commentText,
         commentCreateAt: Date.now(),
         commentLike: 0,
       };
 
-      // Ghi dữ liệu bình luận
-      await set(newCommentRef, commentData);
+      const countSnap = await get(ref(db, `${commentRoot}/count`));
+      const current = countSnap.exists() ? countSnap.val() : 0;
+      const newCount = current + 1;
 
-      // Cập nhật lại count
-      const countRef = ref(db, `Posts/${groupId}/${userPostId}/${postId}/comments/count`);
-      await get(countRef).then(snapshot => {
-        const currentCount = snapshot.exists() ? snapshot.val() : 0;
-        set(countRef, currentCount + 1);
+      await update(ref(db), {
+        [`${commentListPath}/${commentId}`]: commentData,
+        [`${defaultRoot}/commentData/${commentId}`]: commentData,
+
+        [`${commentRoot}/count`]: newCount,
+        [`${defaultRoot}/count`]: newCount,
       });
     }
 
     setCommentText('');
     Keyboard.dismiss();
   };
-
 
   // Xử lý khi nhấn vào icon bình luận
   const handleTagUser = (userTag: Tag) => {

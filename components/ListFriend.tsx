@@ -16,7 +16,7 @@ const ListFriend: React.FC = () => {
     const [myFriends, setMyFriends] = useState<any[]>([]);
     const [suggestedFriends, setSuggestedFriends] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedTab, setSelectedTab] = useState('suggestions');
+    const [selectedTab, setSelectedTab] = useState('friends');
     const [showPopup, setShowPopup] = useState(false);  // Trạng thái popup
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');  // Trạng thái sắp xếp
     const [loadingTabChange, setLoadingTabChange] = useState(false);  // Trạng thái loading khi chuyển tab
@@ -28,20 +28,20 @@ const ListFriend: React.FC = () => {
         if (currentUserId) {
             const fetchFriends = async () => {
                 const friendsRef = ref(database, `Friends/${currentUserId}`);
-                
+
                 onValue(friendsRef, (snapshot) => {
                     const friends: any[] = [];
-            
+
                     snapshot.forEach((childSnapshot) => {
                         const friendId = childSnapshot.key;
                         const status = childSnapshot.val().status;
-            
+
                         friends.push({ friendId, status });
                     });
-            
+
                     fetchFriendDetails(friends);
                 });
-            };            
+            };
 
             const fetchFriendDetails = async (friends: any[]) => {
                 const friendsWithDetails: any[] = [];
@@ -76,12 +76,12 @@ const ListFriend: React.FC = () => {
 
             const fetchFriendSuggestions = (friendId: string, suggestions: any[]) => {
                 const friendsOfFriendRef = ref(database, `Friends/${friendId}`);
-            
+
                 onValue(friendsOfFriendRef, (snapshot) => {
                     snapshot.forEach((childSnapshot) => {
                         const suggestedFriendId = childSnapshot.key;
                         const status = childSnapshot.val().status;
-            
+
                         if (
                             suggestedFriendId !== currentUserId &&
                             !myFriends.some((friend) => friend.friendId === suggestedFriendId) &&
@@ -91,7 +91,7 @@ const ListFriend: React.FC = () => {
                             onValue(suggestedFriendRef, (snapshot) => {
                                 if (snapshot.exists()) {
                                     const suggestedFriendData = snapshot.val();
-            
+
                                     if (!suggestions.some((s) => s.friendId === suggestedFriendId)) {
                                         suggestions.push({
                                             friendId: suggestedFriendId,
@@ -102,7 +102,7 @@ const ListFriend: React.FC = () => {
                             });
                         }
                     });
-            
+
                     setSuggestedFriends(suggestions);
                 });
             };
@@ -124,7 +124,7 @@ const ListFriend: React.FC = () => {
         return friends.sort((a, b) => {
             const nameA = a.name[0].toUpperCase();
             const nameB = b.name[0].toUpperCase();
-            
+
             if (sortOrder === 'asc') {
                 return nameA < nameB ? -1 : 1;
             } else {
@@ -156,9 +156,9 @@ const ListFriend: React.FC = () => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.tabContainer}>
                     <TouchableOpacity
-                        style={[styles.button, selectedTab === 'suggestions' && styles.activeButton]}
-                        onPress={() => handleTabChange('suggestions')}>
-                        <Text style={[styles.buttonText, selectedTab === 'suggestions' && styles.activeText]}>Gợi ý kết bạn</Text>
+                        style={[styles.button, selectedTab === 'friends' && styles.activeButton]}
+                        onPress={() => handleTabChange('friends')}>
+                        <Text style={[styles.buttonText, selectedTab === 'friends' && styles.activeText]}>Danh sách bạn bè</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -172,12 +172,6 @@ const ListFriend: React.FC = () => {
                         onPress={() => handleTabChange('sent')}>
                         <Text style={[styles.buttonText, selectedTab === 'sent' && styles.activeText]}>Lời mời đã gửi</Text>
                     </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                        style={[styles.button, selectedTab === 'friends' && styles.activeButton]}
-                        onPress={() => handleTabChange('friends')}>
-                        <Text style={[styles.buttonText, selectedTab === 'friends' && styles.activeText]}>Danh sách bạn bè</Text>
-                    </TouchableOpacity>
                 </View>
             </ScrollView>
 
@@ -186,7 +180,6 @@ const ListFriend: React.FC = () => {
                     {selectedTab === 'friends' && 'Danh sách'}
                     {selectedTab === 'requests' && 'Lời mời kết bạn'}
                     {selectedTab === 'sent' && 'Lời mời đã gửi'}
-                    {selectedTab === 'suggestions' && 'Gợi ý kết bạn'}
                 </Text>
                 <TouchableOpacity onPress={() => setShowPopup(!showPopup)}>
                     <Image source={require('../icons/icon_filter.png')} style={styles.icon} />

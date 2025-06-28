@@ -24,7 +24,7 @@ const ItemFriend: React.FC<ItemFriendProps> = ({ id, onCheckFriend }) => {
                 const studentData = snapshot.val();
                 const studentId = Object.keys(studentData)[0];
                 setUserName(studentData[studentId].studentName);
-                setUerNumber(studentData[studentId].description)
+                setUerNumber(studentData[studentId].studentNumber)
                 setUserAvatar(studentData[studentId].avatar)
             } else {
                 console.log('No student found with userId:', userId);
@@ -44,7 +44,7 @@ const ItemFriend: React.FC<ItemFriendProps> = ({ id, onCheckFriend }) => {
 
             <View style={styles.details}>
                 <Text style={styles.name}>{userName}</Text>
-                <Text style={styles.des}>{userNumber || `No bio`}</Text>
+                <Text style={styles.des}>{userNumber}</Text>
             </View>
 
             <View style={styles.action}>

@@ -37,7 +37,6 @@ const GroupDetailDefault: React.FC = () => {
         }
     };
 
-
     useEffect(() => {
         if (!groupId) return;
 
@@ -124,234 +123,145 @@ const GroupDetailDefault: React.FC = () => {
         });
     }, [currentUserId]);
 
-    if (loading) {
+    if (!group) {
         return (
-            <View style={styles.loading}>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                 <ActivityIndicator size="large" color="#007bff" />
             </View>
         );
     }
 
     return (
-        <View style={{ flex: 1 }}>
-            <View style={styles.headerContainer}>
+        <ScrollView style={styles.wrapper}>
+            {/* ===== Header có nút back ===== */}
+            <View style={styles.headerBar}>
                 <TouchableOpacity onPress={handleBackPress}>
-                    <Image
-                        source={require('../icons/icon_back.png')}
-                        style={styles.iconImage}
-                    />
+                    <Image source={require('../icons/icon_back.png')} style={styles.iconBack} />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.container}>
-                {group.banner && <Image source={{ uri: group.banner }} style={styles.banner} />}
-                <View style={styles.groupHeader}>
-                    {group.avatar && <Image source={{ uri: group.avatar }} style={styles.avatar} />}
-                    <View style={styles.groupInfo}>
-                        <Text style={styles.name}>{group.groupName || "Không có tên"}</Text>
-                        <Text style={styles.memberCount}>{members.length} thành viên</Text>
-                    </View>
-                </View>
+            {/* ===== Ảnh bìa + avatar ===== */}
+            <View style={styles.coverWrap}>
+                {group.banner && <Image source={{ uri: group.banner }} style={styles.coverImg} />}
+                {group.avatar && <Image source={{ uri: group.avatar }} style={styles.coverAvatar} />}
+            </View>
 
-                {/* Thanh tab */}
-                <View style={styles.tabContainer}>
-                    <TouchableOpacity
-                        style={[styles.buttonTab, activeTab === 'posts' && styles.activeTab]}
-                        onPress={() => setActiveTab('posts')}
-                    >
-                        <Text style={[styles.memberCount, activeTab === 'posts' && styles.activeText]}>Bài viết</Text>
-                    </TouchableOpacity>
+            {/* ===== Thông tin nhóm ===== */}
+            <View style={styles.infoCard}>
+                <Text style={styles.groupNameTxt}>{group.groupName || 'Không có tên'}</Text>
+                <Text style={styles.subTxt}>Nhóm mặc định</Text>
+            </View>
 
-                    <TouchableOpacity
-                        style={[styles.buttonTab, activeTab === 'events' && styles.activeTab]}
-                        onPress={() => setActiveTab('events')}
-                    >
-                        <Text style={[styles.memberCount, activeTab === 'events' && styles.activeText]}>Sự kiện</Text>
-                    </TouchableOpacity>
-                </View>
+            {/* ===== TabBar chỉ còn 2 tab ===== */}
+            <View style={styles.tabBar}>
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'posts' && styles.tabItemActive]}
+                    onPress={() => setActiveTab('posts')}
+                >
+                    <Text style={[styles.tabTxt, activeTab === 'posts' && styles.tabTxtActive]}>Bài viết</Text>
+                </TouchableOpacity>
 
-                {/* Nội dung hiển thị theo tab */}
-                <View style={styles.contentContainer}>
-                    {activeTab === 'posts' ? (
-                        <View>
-                            <Text style={styles.contentText}>Danh sách bài viết</Text>
-                            <ListPost posts={posts} loading={loading} />
-                        </View>
-                    ) : (
-                        <View>
-                            <Text style={styles.contentText}>Danh sách sự kiện</Text>
-                            {/* Thêm thông tin cá nhân ở đây */}
-                        </View>
-                    )}
-                </View>
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'events' && styles.tabItemActive]}
+                    onPress={() => setActiveTab('events')}
+                >
+                    <Text style={[styles.tabTxt, activeTab === 'events' && styles.tabTxtActive]}>Sự kiện</Text>
+                </TouchableOpacity>
+            </View>
 
-            </ScrollView>
-        </View>
+            {/* ===== Nội dung theo tab ===== */}
+            {activeTab === 'posts' ? (
+                <>
+                    <Text style={styles.sectionTitle}>Danh sách bài viết</Text>
+                    <ListPost posts={posts} loading={loading} />
+                </>
+            ) : (
+                <>
+                    <Text style={styles.sectionTitle}>Danh sách sự kiện</Text>
+                </>
+            )}
+        </ScrollView>
     );
+
 };
 
 const styles = StyleSheet.create({
-    headerContainer: {
-        width: '100%',
-        height: 60,
+    wrapper: { flex: 1, backgroundColor: '#f1f3f5' },
+
+    /* Header */
+    headerBar: {
+        height: 56,
         backgroundColor: '#3399FF',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 10,
+        justifyContent: 'center',
+        paddingHorizontal: 12,
     },
-    iconImage: {
-        width: 30,
-        height: 30,
+    iconBack: { width: 28, height: 28 },
+
+    /* Cover + Avatar */
+    coverWrap: { width: '100%', height: 200, backgroundColor: '#ccc' },
+    coverImg: { width: '100%', height: '100%' },
+    coverAvatar: {
+        position: 'absolute',
+        bottom: -35,
+        left: 16,
+        width: 70,
+        height: 70,
+        zIndex: 9999,
+        borderRadius: 35,
+        borderWidth: 3,
+        borderColor: '#fff',
     },
-    container: {
-        flex: 1,
-        backgroundColor: '#e2e5e9',
-    },
-    btnContainer: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end'
-    },
-    input: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 20,
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-    },
-    tabContainer: {
-        flexDirection: 'row',
-        padding: 5,
-        justifyContent: 'space-between',
+
+    /* Info card */
+    infoCard: {
         backgroundColor: '#fff',
+        paddingTop: 48,           // để lệch xuống vì avatar overlap
+        paddingBottom: 16,
         paddingHorizontal: 16,
-        marginBottom: 5,
-        paddingBottom: 10,
     },
-    banner: {
+    groupNameTxt: { fontSize: 20, fontWeight: 'bold' },
+    subTxt: { color: '#666', marginTop: 4 },
+
+    /* Tab bar */
+    tabBar: {
+        flexDirection: 'row',
         backgroundColor: '#fff',
-        width: '100%',
-        height: 200,
-        resizeMode: 'cover',
+        borderBottomWidth: 1,
+        borderBottomColor: '#ececec',
+        marginVertical: 5
     },
-    icon: {
-        width: 20,
-        height: 20,
-    },
+    tabItem: { flex: 1, alignItems: 'center', paddingVertical: 12 },
+    tabItemActive: { borderBottomWidth: 3, borderBottomColor: '#3399FF' },
+    tabTxt: { fontSize: 15, color: '#666' },
+    tabTxtActive: { color: '#3399FF', fontWeight: '600' },
+
+    /* Post box */
     postBox: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#fff',
-        padding: 10,
         paddingHorizontal: 16,
-        marginVertical: 5,
+        paddingVertical: 8,
     },
-    loading: {
+    postAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
+    postInput: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 20,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
     },
-    groupHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        backgroundColor: '#fff',
-    },
-    avatar: {
-        width: 70,
-        height: 70,
-        borderRadius: 50,
-        marginRight: 15,
-    },
-    avatarPost: {
-        width: 50,
-        height: 50,
-        borderRadius: 50,
-        marginRight: 15,
-    },
-    groupInfo: {
-        flex: 1,
-    },
-    name: {
-        fontSize: 20,
-        fontWeight: 'bold',
-    },
-    activeTab: {
-        backgroundColor: '#007bff', // Màu xanh khi tab được chọn
-    },
-    memberCount: {
-        color: '#000',
-        fontSize: 16,
-    },
-    activeText: {
-        color: '#fff', // Chữ màu trắng khi tab được chọn
-        fontWeight: 'bold',
-    },
-    button: {
-        backgroundColor: '#e2e5e9',
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 6,
-        alignItems: 'center',
-        margin: 10,
-    },
-    buttonTab: {
-        width: '48%',
-        backgroundColor: '#e2e5e9',
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        fontWeight: 'bold',
-        fontSize: 20,
-        borderRadius: 6,
-        alignItems: 'center',
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
+    postPlaceholder: { color: '#888' },
+
     sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginTop: 20,
-        marginBottom: 5,
-    },
-    memberItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ddd',
-    },
-    memberAvatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        marginRight: 12,
-    },
-    memberInfo: {
-        flex: 1,
-    },
-    memberText: {
         fontSize: 16,
-        fontWeight: '500',
-    },
-    errorText: {
-        fontSize: 18,
-        textAlign: 'center',
-        color: 'red',
-        marginTop: 20,
-    },
-    contentContainer: {
+        fontWeight: '600',
         backgroundColor: '#fff',
-        padding: 16,
-    },
-    contentText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        textAlign: 'center',
+        padding: 20,
+        paddingVertical: 15,
+        marginBottom: 6,
+        paddingHorizontal: 16,
     },
 });
 

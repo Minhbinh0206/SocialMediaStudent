@@ -2,14 +2,11 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import FriendProfile from '../components/FriendProfile';
 import HeaderBack from '../components/HeaderBack';
-import { RouteProp } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../type';
 
-type RootStackParamList = {
-    Friend: { userId: string };  // Định nghĩa các tham số cho màn hình Friend
-};
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Friend'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'FriendScreen'>;
 
 const FriendScreen: React.FC<Props> = ({ route }) => {
     // Lấy userId từ tham số của route

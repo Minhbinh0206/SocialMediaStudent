@@ -17,8 +17,6 @@ import CommentScreen from './pages/CommentScreen';
 import SearchFriend from './pages/SearchFriend';
 import Message from './pages/Message';
 import MessageDetail from './pages/MessageDetail';
-import NotifyDetail from './pages/NotifyDetailScreen';
-import Friend from './pages/FriendScreen';
 import GroupDetail from './pages/GroupDetail';
 import GroupDetailNotJoin from './components/GroupDetailNotJoin';
 import GroupDetailJoined from './components/GroupDetailJoined';
@@ -38,7 +36,7 @@ function App(): React.JSX.Element {
         <Stack.Screen name="Home" component={Home} options={{ headerShown: false }} />
         <Stack.Screen name="UploadProfile" component={UploadProfile} options={{ headerShown: false }} />
         <Stack.Screen name="SearchFriend" component={SearchFriend} options={{ headerShown: false }} />
-        <Stack.Screen name="Friend" component={FriendScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="FriendScreen" component={FriendScreen} options={{ headerShown: false}}/>
         <Stack.Screen name="CommentScreen" component={CommentScreen} options={{ headerShown: false }} />
         <Stack.Screen name="NotifyDetailScreen" component={NotifyDetailScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Message" component={Message} options={{ headerShown: false }} />
