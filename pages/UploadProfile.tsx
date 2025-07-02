@@ -245,7 +245,6 @@ const UploadProfile = () => {
 
       // Lưu thông tin vào Firebase Database
       const userRef = database().ref(`Users/${userId}`);
-      const studentRef = database().ref(`Departments/${selectedDepartmentId}/majors/${selectedMajorId}/classes/${selectedClassId}/students/${userId}`);
       
       await userRef.set({
         studentName: name,
@@ -259,19 +258,6 @@ const UploadProfile = () => {
         studentNumber: mssv,
         userId,
         isOnline: true,
-      });
-
-      await studentRef.set({
-        studentName: name,
-        email,
-        birthday: dob?.toISOString().split('T')[0], // ví dụ: "2000-12-31"
-        gender,
-        classId: selectedClassId,
-        majorId: selectedMajorId,
-        departmentId: selectedDepartmentId,
-        avatar: avatarUrl,
-        studentNumber: mssv,
-        userId,
       });
 
       navigation.navigate('Home', { userId });

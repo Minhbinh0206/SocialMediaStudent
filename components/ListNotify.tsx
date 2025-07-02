@@ -18,31 +18,6 @@ import { RootStackParamList } from '../type';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'NotifyDetailScreen'>;
 
-const ShimmerNotify = () => {
-    const opacity = useRef(new Animated.Value(0.3)).current;
-
-    useEffect(() => {
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(opacity, {
-                    toValue: 1,
-                    duration: 600,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(opacity, {
-                    toValue: 0.3,
-                    duration: 600,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-    }, []);
-
-    return (
-        <Animated.View style={[styles.shimmerBox, { opacity }]} />
-    );
-};
-
 const ListNotify = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -215,7 +190,7 @@ const ListNotify = () => {
     });
 
     return (
-        <View style={{ flex: 1, position: 'relative' }}>
+        <View style={{ flex: 1, height: '100%'}}>
             <ScrollView ref={scrollRef} style={styles.container}>
                 <View style={styles.pinnedWrapper}>
                     <View style={styles.pinnedItem}>
@@ -355,9 +330,7 @@ const ListNotify = () => {
 
                 </View>
 
-                {loading ? (
-                    [...Array(3)].map((_, i) => <ShimmerNotify key={i} />)
-                ) : notifications.length > 0 ? (
+                {notifications.length > 0 ? (
                     notifications.map((n) => (
                         <ItemNotify
                             key={n.notifyId}
@@ -382,6 +355,7 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: 10,
         paddingBottom: 10,
+        height: '100%'
     },
     popupTitle: {
         fontSize: 24,
