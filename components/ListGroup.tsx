@@ -238,7 +238,7 @@ const ListGroup: React.FC = () => {
 /* ---------- STYLES ---------- */
 const styles = StyleSheet.create({
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', height: 400 },
-  tabContainer: { flexDirection: 'row', marginBottom: 10 },
+  tabContainer: { flexDirection: 'row', marginBottom: 10, flex: 1, minHeight: 40 },
   subHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 10 },
   title: { fontSize: 24, fontWeight: 'bold' },
   icon: { width: 24, height: 24 },
@@ -249,6 +249,7 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: '#e2e5e9', paddingVertical: 10, paddingHorizontal: 15,
     borderRadius: 25, marginRight: 10,
+    flex: 1
   },
   activeButton: { backgroundColor: '#007BFF' },
   buttonText: { color: '#000', fontWeight: 'bold' },

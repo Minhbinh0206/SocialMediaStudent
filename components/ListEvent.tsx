@@ -1,167 +1,200 @@
-import React, { useState, useEffect } from 'react';
-import { View, FlatList, ActivityIndicator, StyleSheet, Dimensions, Animated } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    View,
+    Animated,
+    FlatList,
+    Dimensions,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    Image,
+} from 'react-native';
 import { database } from '../firebaseConfig';
 import { ref, onValue, off } from 'firebase/database';
-import { Text } from 'react-native';
 import ItemEvent from './ItemEvent';
 import LottieView from 'lottie-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../type';
 
-const { width } = Dimensions.get('window'); // Lấy kích thước màn hình
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width * 0.75;
+const SPACING = 16;
+const SIDE_PADDING = (width - CARD_WIDTH) / 2;
 
 const ListEvent: React.FC = () => {
-    const [events, setEvents] = useState<any[]>([]); // Dữ liệu lấy về sẽ là kiểu `any`
+    const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
-    const scrollX = new Animated.Value(0); // Để theo dõi vị trí cuộn
-    const fadeAnim = new Animated.Value(0); // Để điều khiển hiệu ứng fade in
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-    // Fetch dữ liệu từ Firebase theo thời gian thực
+    const scrollX = useRef(new Animated.Value(0)).current;
+    const flatListRef = useRef<FlatList>(null);
+
+
+    /* ───── Lấy sự kiện realtime ───── */
     useEffect(() => {
-        const eventsRef = ref(database, 'Events'); // Truy cập vào node 'Events'
-
-        // Đăng ký sự kiện nhận dữ liệu theo thời gian thực
-        const onEventsValueChange = (snapshot: any) => {
-            const data = snapshot.val();
+        const eventsRef = ref(database, 'Events');
+        const listener = (snap: any) => {
+            const data = snap.val();
+            const loaded: any[] = [];
 
             if (data) {
-                let loadedEvents: any[] = [];
-
-                // Duyệt qua các adminEventId và eventId để lấy dữ liệu
-                Object.keys(data).forEach((adminEventId) => {
-                    Object.keys(data[adminEventId]).forEach((eventId) => {
-                        const event = data[adminEventId][eventId];
-                        loadedEvents.push({
-                            id: eventId,
-                            ...event,
-                        });
+                Object.entries(data).forEach(([adminId, adminEvents]) => {
+                    Object.entries(adminEvents as any).forEach(([eventId, evt]: any) => {
+                        if (evt.status == 2) {
+                            return;
+                        }
+                        else {
+                            if (evt && evt.titleEvent && evt.beginAt) {
+                                loaded.push({
+                                    id: eventId,
+                                    adminId,
+                                    eventId,
+                                    ...evt,
+                                });
+                            }
+                        }
                     });
                 });
 
-                setEvents(loadedEvents);
-            } else {
-                setEvents([]);
             }
-
+            setEvents(loaded);
             setLoading(false);
         };
 
-        // Đăng ký listener cho sự kiện "value" của Firebase
-        onValue(eventsRef, onEventsValueChange);
+        onValue(eventsRef, listener);
+        return () => off(eventsRef, 'value', listener);
+    }, []);
 
-        // Cleanup khi component unmount hoặc khi listener không cần thiết
-        return () => {
-            off(eventsRef, 'value', onEventsValueChange); // Dừng listener
-        };
-    }, []); // Chạy 1 lần khi component mount
-
-    // Hiệu ứng Fade in khi dữ liệu được load
     useEffect(() => {
-        if (!loading) {
-            Animated.timing(fadeAnim, {
-                toValue: 1, // Tạo hiệu ứng fade in
-                duration: 500, // Thời gian fade
-                useNativeDriver: true,
-            }).start();
-        }
-    }, [loading]); // Khi `loading` chuyển thành false, bắt đầu hiệu ứng fade
+        if (events.length === 0) return;
+        let index = 0;
+        const interval = setInterval(() => {
+            index = (index + 1) % events.length;
+            flatListRef.current?.scrollToOffset({
+                offset: index * (CARD_WIDTH + SPACING),
+                animated: true,
+            });
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [events]);
 
     if (loading) {
         return (
-            <View style={styles.loaderContainer}>
-                {/* Sử dụng Lottie animation */}
+            <View style={styles.loader}>
                 <LottieView
                     source={require('../animations/loading.json')}
                     autoPlay
                     loop
-                    style={styles.lottie}
+                    style={{ width: 150, height: 150 }}
                 />
             </View>
         );
     }
 
+    if (events.length === 0) {
+        return <View style={[styles.emptyContainer, { width }]}>
+            <Text style={styles.empty}>Chưa có sự kiện</Text>
+        </View>
+    }
+
     return (
         <View>
-            <Text style={styles.title}>Sự kiện</Text>
+            <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 10
+            }}>
+                <Text style={styles.title}>Sự kiện</Text>
+
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('ListEventStatus')}
+                    style={{
+                        backgroundColor: '#fff',
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 100
+                    }}
+                >
+                    <Image
+                        source={require('../icons/icon_more.png')}
+                        style={{ width: 20, height: 20 }}
+                    />
+                </TouchableOpacity>
+            </View>
+
             <Animated.FlatList
+                ref={flatListRef}
                 data={events}
-                keyExtractor={(item) => item.id}  // Sử dụng 'id' làm keyExtractor
-                horizontal={true}  // Hiển thị theo chiều ngang
+                keyExtractor={(item) => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                snapToInterval={CARD_WIDTH + SPACING}
+                snapToAlignment="start"
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                    { useNativeDriver: true }
+                )}
                 renderItem={({ item, index }) => {
                     const inputRange = [
-                        (index - 1) * (width * 0.75), // Vị trí phần tử trái
-                        index * (width * 0.75), // Vị trí phần tử chính
-                        (index + 1) * (width * 0.75), // Vị trí phần tử phải
+                        (index - 1) * (CARD_WIDTH + SPACING),
+                        index * (CARD_WIDTH + SPACING),
+                        (index + 1) * (CARD_WIDTH + SPACING),
                     ];
-
-                    const outputRangeScale = [0.9, 1, 0.9]; // Hiệu ứng thu nhỏ cho các phần tử bên ngoài
-                    const outputRangeOpacity = [0.5, 1, 0.5]; // Hiệu ứng mờ cho các phần tử bên ngoài
 
                     const scale = scrollX.interpolate({
                         inputRange,
-                        outputRange: outputRangeScale,
-                    });
-
-                    const opacity = scrollX.interpolate({
-                        inputRange,
-                        outputRange: outputRangeOpacity,
+                        outputRange: [0.9, 1, 0.9],
                     });
 
                     return (
-                        <View style={styles.eventWrapper}>
-                            <Animated.View style={{ transform: [{ scale }], opacity }}>
+                        <View style={{ width: CARD_WIDTH, marginHorizontal: SPACING / 2 }}>
+                            <Animated.View style={{ transform: [{ scale }] }}>
                                 <ItemEvent
                                     title={item.titleEvent}
                                     content={item.contentEvent}
-                                    imageUrl={item.imageEvent}
+                                    imageUrl={item.imageEvents || []}
+                                    createAt={item.createAt}
+                                    beginAt={item.beginAt}
+                                    finishAt={item.finishAt}
+                                    status={item.status}
+                                    adminId={item.userId}
+                                    eventId={item.eventId}
+                                    onClick={() => navigation.navigate('EventDetail', { userId: item.userId, eventId: item.eventId })}
                                 />
                             </Animated.View>
                         </View>
                     );
                 }}
-                contentContainerStyle={{ paddingHorizontal: 0 }}
-                snapToInterval={width * 0.75}  // Điều chỉnh chiều rộng phần tử để khi lướt qua nó sẽ "dừng lại" tại phần tử
-                decelerationRate="fast"
-                showsHorizontalScrollIndicator={false}
-                snapToAlignment="center"
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                    { useNativeDriver: true }
-                )}
             />
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    loaderContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    lottie: {
-        width: 150,
-        height: 150,
-    },
+    loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        margin: 15,
-        textAlign: 'left',
+        fontSize: 25,
+        fontWeight: '700',
+        marginBottom: 12,
+        color: '#333',
     },
-    eventWrapper: {
-        width: width * 0.75,
-        alignItems: 'center',
+    emptyContainer: {
         justifyContent: 'center',
-    },
-    skeletonContainer: {
-        flexDirection: 'row',
         alignItems: 'center',
+        paddingVertical: 20,
+        minHeight: 200,
+        textAlign: 'center'
     },
-    skeletonItem: {
-        width: 100,
-        height: 100,
-        marginRight: 10,
-        borderRadius: 10,
+    empty: {
+        fontStyle: 'italic',
+        color: '#888',
+        fontSize: 16,
+        textAlign: 'center',
     },
+
 });
 
 export default ListEvent;

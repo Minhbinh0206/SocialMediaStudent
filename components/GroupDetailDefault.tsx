@@ -134,11 +134,7 @@ const GroupDetailDefault: React.FC = () => {
     return (
         <ScrollView style={styles.wrapper}>
             {/* ===== Header có nút back ===== */}
-            <View style={styles.headerBar}>
-                <TouchableOpacity onPress={handleBackPress}>
-                    <Image source={require('../icons/icon_back.png')} style={styles.iconBack} />
-                </TouchableOpacity>
-            </View>
+            <HeaderBack namePage={group.groupName}/>
 
             {/* ===== Ảnh bìa + avatar ===== */}
             <View style={styles.coverWrap}>

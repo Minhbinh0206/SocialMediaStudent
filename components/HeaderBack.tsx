@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native'; // Import useNavigation
 
-const HeaderBack = () => {
+type HeaderBackProps = {
+    namePage: string;
+};
+
+const HeaderBack: React.FC<HeaderBackProps> = ({ namePage }) => {
     const navigation = useNavigation(); // Khai báo useNavigation
     const [isPressing, setIsPressing] = useState(false); // Trạng thái nhấn nút
 
@@ -26,6 +30,8 @@ const HeaderBack = () => {
                     style={styles.iconImage}
                 />
             </TouchableOpacity>
+
+            <Text style={styles.titleText}>{namePage}</Text>
         </View>
     );
 };
@@ -44,6 +50,14 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
     },
+    titleText: {
+        fontSize: 20,
+        color: '#fff',
+        fontWeight: 'bold',
+        flex: 1,
+        textAlign: 'center',
+    },
+
 });
 
 export default HeaderBack;

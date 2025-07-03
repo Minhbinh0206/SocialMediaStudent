@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, FlatList, StyleSheet, LayoutAnimation, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, LayoutAnimation, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import Header from '../components/Header';
 import Navigation from '../components/Navigation';
 import { get, ref, onValue, off } from 'firebase/database';
@@ -22,11 +22,17 @@ const Home: React.FC = () => {
     const [posts, setPosts] = useState<any[]>([]);
     const [surveys, setSurveys] = useState<any[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
+    const [postsLoaded, setPostsLoaded] = useState(false);
+    const [surveysLoaded, setSurveysLoaded] = useState(false);
 
     const handleIconPress = (newTitle: string, newPage: string) => {
         setTitle(newTitle);
         setPageName(newPage);
-        if (newPage === 'home') setLoading(true);
+        if (newPage === 'home') {
+            setLoading(true);
+            setPostsLoaded(false);
+            setSurveysLoaded(false);
+        }
     };
 
     useEffect(() => {
@@ -60,6 +66,7 @@ const Home: React.FC = () => {
                     const data = snapshot.val();
                     if (!data) {
                         setPosts([]);
+                        setPostsLoaded(true);
                         return;
                     }
 
@@ -81,6 +88,7 @@ const Home: React.FC = () => {
 
                     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                     setPosts(loadedPosts);
+
                 });
 
                 // Surveys
@@ -98,7 +106,7 @@ const Home: React.FC = () => {
                         type: 'survey',
                         createdAt: Number(survey.createdAt),
                     }));
-
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                     setSurveys(loadedSurveys);
                 });
 
@@ -136,6 +144,14 @@ const Home: React.FC = () => {
         }
     };
 
+    if (loading) {
+        return (
+            <View style={{ height: '100%', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color="#3498db" />
+            </View>
+        );
+    }
+
     return (
         <View style={{ position: 'relative', height: '100%', paddingBottom: 50 }}>
             <Header title={title} pageName={pageName} />
@@ -148,7 +164,23 @@ const Home: React.FC = () => {
                         ListHeaderComponent={
                             <>
                                 <ListEvent />
-                                <Text style={styles.feedTitle}>Bảng tin</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 }}>
+                                    <Text style={styles.feedTitle}>Bảng tin</Text>
+                                    <TouchableOpacity
+                                        onPress={() => console.log('Filter Post and Notify')}
+                                        style={{
+                                            backgroundColor: '#fff',
+                                            paddingHorizontal: 10,
+                                            paddingVertical: 5,
+                                            borderRadius: 100
+                                        }}
+                                    >
+                                        <Image
+                                            source={require('../icons/icon_filter.png')}
+                                            style={{ width: 20, height: 20 }}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
                             </>
                         }
                         data={feed}
@@ -182,7 +214,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         marginBottom: 12,
         color: '#333',
-        paddingHorizontal: 20
     },
     listItem: {
         flex: 1,

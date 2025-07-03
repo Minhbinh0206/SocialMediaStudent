@@ -16,4 +16,6 @@ export type RootStackParamList = {
   GroupDetailNotJoin: { groupId: string };
   GroupDetailJoined: { groupId: string };
   CreateGroup: undefined;
+  EventDetail: { userId: string; eventId: string };
+  ListEventStatus: undefined;
 };

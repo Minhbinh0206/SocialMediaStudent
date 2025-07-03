@@ -23,6 +23,8 @@ import GroupDetailJoined from './components/GroupDetailJoined';
 import CreateGroup from './components/CreateGroup';
 import NotifyDetailScreen from './pages/NotifyDetailScreen';
 import FriendScreen from './pages/FriendScreen';
+import EventDetail from './pages/EventDetail';
+import ListEventStatus from './pages/ListEventStatus';
 
 const Stack = createStackNavigator();
 
@@ -45,6 +47,8 @@ function App(): React.JSX.Element {
         <Stack.Screen name="GroupDetailNotJoin" component={GroupDetailNotJoin} options={{ headerShown: false }} />
         <Stack.Screen name="GroupDetailJoined" component={GroupDetailJoined}  options={{ headerShown: false }}/>
         <Stack.Screen name="CreateGroup" component={CreateGroup} options={{ headerShown: false }} />
+        <Stack.Screen name="EventDetail" component={EventDetail} options={{ headerShown: false }} />
+        <Stack.Screen name="ListEventStatus" component={ListEventStatus} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

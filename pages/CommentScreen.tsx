@@ -349,7 +349,7 @@ const CommentScreen = () => {
 
   return (
     <View style={{ position: 'relative', height: '100%', paddingBottom: 100 }}>
-      <HeaderBack />
+      <HeaderBack namePage='Bình luận bài viết'/>
 
       <View style={styles.container}>
         <ScrollView showsVerticalScrollIndicator={false}>

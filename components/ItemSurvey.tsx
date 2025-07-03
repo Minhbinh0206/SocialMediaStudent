@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Modal,
   ScrollView,
   ImageBackground,
+  Animated,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { getDatabase, ref, onValue, off, get, runTransaction, set } from 'firebase/database';
@@ -132,6 +133,9 @@ const ItemSurvey: React.FC<ItemSurveyProps> = ({ survey }) => {
   const [respondentCount, setRespondentCount] = useState(0);
   const [adminName, setAdminName] = useState('');
   const [adminAvatar, setAdminAvatar] = useState('');
+  const translateY = useRef(new Animated.Value(-20)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const [loading, setLoading] = useState<boolean>(true);
 
   /* ---------------- Lấy kết quả của riêng user ---------------- *//* ---------------- Đếm số người tham gia --------------------- */
   useEffect(() => {
@@ -156,9 +160,11 @@ const ItemSurvey: React.FC<ItemSurveyProps> = ({ survey }) => {
       const paths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
       for (const p of paths) {
         const snap = await get(ref(db, `Admins/${p}/${survey.userId}`));
-        if (snap.exists()) { const d = snap.val(); setAdminName(d.fullName || 'Admin'); setAdminAvatar(d.avatar || ''); break; }
+        if (snap.exists()) { const d = snap.val(); setAdminName(d.fullName || 'Admin'); setLoading(false); setAdminAvatar(d.avatar || ''); break; }
       }
+      setLoading(false)
     })();
+
   }, [survey.userId]);
 
   /* ---------------- Đồng hồ đếm ngược ------------------------ */
@@ -225,6 +231,23 @@ const ItemSurvey: React.FC<ItemSurveyProps> = ({ survey }) => {
     return null;
   };
 
+  useEffect(() => {
+    if (!loading) {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [loading]);
+
   const handleSubmit = async () => {
     if (answered) return;
     const unanswered = Object.keys(survey.questions).filter(id => selected[id] === undefined);
@@ -273,7 +296,16 @@ const ItemSurvey: React.FC<ItemSurveyProps> = ({ survey }) => {
   /* ------------------------------------------------------------ */
   return (
     <>
-      <View style={[styles.itemSurvey, styles.container]}>
+      <Animated.View
+        style={[
+          styles.itemSurvey,
+          styles.container,
+          {               /* thêm 2 dòng dưới */
+            transform: [{ translateY }],
+            opacity,
+          },
+        ]}
+      >
         {/* Header */}
         <View style={styles.surveyHeader}>
           <View style={styles.author}>
@@ -285,7 +317,6 @@ const ItemSurvey: React.FC<ItemSurveyProps> = ({ survey }) => {
           </View>
         </View>
         <Text style={styles.titleTextMiddle}>{survey.title}</Text>
-        {!modalVisible && <Text style={styles.summary}>{`${totalQuestions} câu hỏi · ${respondentCount} người đã tham gia`}</Text>}
         {modalVisible && Object.entries(survey.questions).sort(([, a], [, b]) => (a.index ?? 0) - (b.index ?? 0)).map((e, i) => renderQuestion(e, i))}
 
         {/* Footer */}
@@ -297,7 +328,7 @@ const ItemSurvey: React.FC<ItemSurveyProps> = ({ survey }) => {
 
           <Text style={styles.countdown}>{formatTime(timeLeft)}</Text>
         </View>
-      </View>
+      </Animated.View>
 
       <Modal
         visible={modalVisible}
@@ -308,11 +339,17 @@ const ItemSurvey: React.FC<ItemSurveyProps> = ({ survey }) => {
         <View style={styles.backdrop}>
           <View style={styles.centerBox}>
             {/* ----- Header ----- */}
-            <View style={styles.headerRow}>
-              <Text style={styles.title}>📊 Khảo sát</Text>
-              <Pressable onPress={() => setModalVisible(false)}>
-                <Text style={styles.closeTxt}>✕</Text>
-              </Pressable>
+            <View style={styles.headerColumn}>
+              <View style={styles.headerRow}>
+                <Text style={styles.title}>📊 Khảo sát</Text>
+                <Pressable onPress={() => setModalVisible(false)}>
+                  <Text style={styles.closeTxt}>✕</Text>
+                </Pressable>
+              </View>
+              <View style={styles.count}>
+                <Text style={styles.summary}>{`Số câu hỏi: ${totalQuestions}`}</Text>
+                <Text style={styles.summary}>{`Người tham gia: ${respondentCount}`}</Text>
+              </View>
             </View>
 
             {/* ----- Nội dung cuộn ----- */}
@@ -356,19 +393,20 @@ export default ItemSurvey;
  * Styles
  * --------------------------------------------------*/
 const styles = StyleSheet.create({
+  count: { display: 'flex', flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 30, fontWeight: 'bold' },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',   // ➜ căn giữa dọc
-    alignItems: 'center',       // ➜ căn giữa ngang
-    padding: 16,                // chừa viền an toàn
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
   },
 
   // hộp trắng ở giữa
   centerBox: {
-    width: '100%',          // 100 % chiều ngang safe‑area
-    maxWidth: 420,          // không rộng quá tablet
-    maxHeight: '85%',       // cao tối đa 85 %
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '85%',
     backgroundColor: '#fff',
     borderRadius: 20,
     overflow: 'hidden',
@@ -383,11 +421,17 @@ const styles = StyleSheet.create({
 
   /* Header */
   headerRow: {
-    backgroundColor: '#ffffd8',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    paddingBottom: 4
+  },
+  headerColumn: {
+    backgroundColor: '#ffffd8',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderColor: '#eee',
   },
@@ -501,7 +545,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  summary: { fontSize: 15, fontStyle: 'italic', color: '#fff', marginVertical: 10, textAlign: 'center', backgroundColor: '#00CD00', padding: 10, fontWeight: 'bold', marginHorizontal: 50, borderRadius: 20 },
+  summary: { fontSize: 15, fontStyle: 'italic', color: '#000', marginBottom: 10, fontWeight: 'bold' },
   itemSurvey: { backgroundColor: '#ffffd8', borderRadius: 8, padding: 16, marginBottom: 16, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
   surveyHeader: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#ccc', paddingBottom: 5, marginBottom: 4 },
   author: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },

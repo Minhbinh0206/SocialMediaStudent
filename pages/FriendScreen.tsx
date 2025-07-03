@@ -14,7 +14,7 @@ const FriendScreen: React.FC<Props> = ({ route }) => {
 
     return (
         <View style={{ flexDirection: 'column', flex: 1 }}>
-            <HeaderBack />
+            <HeaderBack namePage='Trang cá nhân'/>
             <View style={styles.listItem}>
                 {/* Truyền userId vào FriendProfile */}
                 <FriendProfile userId={userId} />

@@ -565,7 +565,7 @@ const GroupDetailJoined: React.FC = () => {
 
     return (
         <ScrollView style={styles.wrapper} >
-            <HeaderBack />
+            <HeaderBack namePage={group.groupName}/>
 
             {/* Ảnh bìa */}
             <View style={styles.coverContainer}>

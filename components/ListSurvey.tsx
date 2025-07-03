@@ -1,8 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, Animated } from 'react-native';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
-import ItemSurvey from './ItemSurvey'; // Component bạn đã tạo trước đó
-import { Survey } from './ItemSurvey';
+import ItemSurvey, { Survey } from './ItemSurvey';
+
+const Shimmer: React.FC = () => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  return <Animated.View style={[styles.shimmer, { opacity }]} />;
+};
 
 const ListSurvey: React.FC = () => {
   const [surveys, setSurveys] = useState<Survey[]>([]);
@@ -30,8 +52,10 @@ const ListSurvey: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#3498db" />
+      <View style={styles.shimmerContainer}>
+        {[...Array(3)].map((_, index) => (
+          <Shimmer key={index} />
+        ))}
       </View>
     );
   }
@@ -63,6 +87,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  shimmerContainer: {
+    padding: 16,
+  },
+  shimmer: {
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 16,
+    backgroundColor: '#e0e0e0',
   },
 });
 

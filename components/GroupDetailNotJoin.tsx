@@ -159,7 +159,8 @@ const GroupDetailNotJoin: React.FC<GroupDetailNotJoinProps> = ({ groupId }) => {
 
     return (
         <View style={{ flex: 1 }}>
-            <HeaderBack />
+            <HeaderBack namePage={group.groupName}/>
+            
             <View style={styles.container}>
                 {group.banner && <Image source={{ uri: group.banner }} style={styles.banner} />}
                 <View style={styles.groupHeader}>
