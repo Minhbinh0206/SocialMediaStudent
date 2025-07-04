@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, memo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -12,13 +12,82 @@ import {
     Pressable,
     Button,
     TouchableOpacity,
+    ImageBackground,
+    Alert,
+    Modal,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { database } from '../firebaseConfig';
-import { ref, onValue, off, get, set } from 'firebase/database';
+import { ref, onValue, off, get, set, update } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Header from '../components/Header';
 import HeaderBack from '../components/HeaderBack';
+import { Question, QuestionNumber } from '../components/ItemSurvey';
+import Slider from '@react-native-community/slider';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+
+dayjs.extend(customParseFormat);
+const FORMAT = 'HH:mm:ss DD/MM/YYYY';
+interface NumProps { qid: string; q: QuestionNumber; idx: number; saved: number | undefined; onSave: (id: string, v: number) => void; disabled: boolean; }
+
+const NumberQuestion: React.FC<NumProps> = memo(
+    ({ qid, q, idx, saved, onSave, disabled }) => {
+        const min = q.min ?? 0;
+        const max = q.max ?? 10;
+        const initial = saved ?? Math.round((min + max) / 2);
+
+        /* chỉ 1 state duy nhất */
+        const [value, setValue] = useState<number>(initial);
+
+        /* khi `saved` (từ Firebase) thay đổi */
+        useEffect(() => {
+            if (saved !== undefined) setValue(saved);
+        }, [saved]);
+
+        const progress = (value - min) / (max - min || 1);
+        const color =
+            progress < 0.25
+                ? '#e74c3c'
+                : progress < 0.5
+                    ? '#e67e22'
+                    : progress < 0.75
+                        ? '#f1c40f'
+                        : '#2ecc71';
+
+        return (
+            <ImageBackground
+                key={qid}
+                source={require('../images/image_note.jpg')}
+                style={styles.qBlock}
+                imageStyle={{ borderRadius: 8 }}
+            >
+                <Text style={styles.qContent}>{`${idx + 1}. ${q.content}`}</Text>
+
+                <Slider
+                    disabled={disabled}
+                    minimumValue={min}
+                    maximumValue={max}
+                    step={1}
+                    value={value}                      // 👍 luôn sync
+                    onValueChange={setValue}           // kéo đến đâu, state đổi đến đó
+                    onSlidingComplete={(v) => onSave(qid, v)}
+                    style={{ height: 25 }}
+                />
+
+                <View style={styles.numLabels}>
+                    <Text>{min}</Text>
+                    <Text style={[styles.valueText, { color }]}>{value}</Text>
+                    <Text>{max}</Text>
+                </View>
+            </ImageBackground>
+        );
+    },
+    (p, n) => p.saved === n.saved && p.disabled === n.disabled,
+);
+
+const levelMap = { 1: 'Rất tệ', 2: 'Không thích', 3: 'Bình thường', 4: 'Thích', 5: 'Rất thích' } as const;
+const levelColors = ['#e74c3c', '#e67e22', '#f1c40f', '#27ae60', '#2ecc71'];
 
 type RouteParams = {
     EventDetail: {
@@ -49,15 +118,185 @@ const EventDetail: React.FC = () => {
     const [student, setStudent] = useState<any | null>(null);
     const auth = getAuth();
     const [isCheckedIn, setIsCheckedIn] = useState(false);
-    // ngay sau const [event, setEvent] = useState(null);
+    const [sending, setSending] = useState(false);
     const titleEvent = event?.titleEvent || '';
     const contentEvent = event?.contentEvent || '';
     const imageEvents = event?.imageEvents || [];
     const beginAt = event?.beginAt || '';
     const finishAt = event?.finishAt || '';
     const createAt = event?.createAt || '';
-    const status = event?.status ?? 0;   // 0 mặc định
+    const status = event?.status ?? 0;
+    const [survey, setSurvey] = useState<any | null>(null);
+    const [selected, setSelected] = useState<Record<string, any>>({});
+    const [answered, setAnswered] = useState(false);         // ✅ đã khảo sát?
+    const [isScannerVisible, setScannerVisible] = useState(false);
 
+    const openScanner = () => setScannerVisible(true);
+
+    const onScanSuccess = (e: any) => {
+        const data = e.data;
+        console.log("QR scanned:", data);
+        setScannerVisible(false);
+        // TODO: xử lý dữ liệu QR (check-in hoặc gọi API tại đây)
+    };
+
+    const setAnswer = (qid: string, value: any) => {
+        if (answered) return;
+        setSelected(prev => ({ ...prev, [qid]: value }));
+    };
+
+    const normalizeAnswers = (
+        answersIdx: Record<string, any>,          // {0:"B",1:5}
+        questionsObj: Record<string, Question>,   // survey.questions
+    ) => {
+        const qids = Object.keys(questionsObj);   // ['q1','q2', ...] đúng thứ tự
+        const result: Record<string, any> = {};
+
+        qids.forEach((qid, idx) => {
+            if (answersIdx[idx] !== undefined) {
+                result[qid] = answersIdx[idx];
+            }
+        });
+
+        return result;
+    };
+
+    /* ---------- khi quét thành công ---------- */
+    const onScanned = (data: string) => {
+        console.log('QR Code:', data);
+
+        // ⚠️ So sánh với mã hợp lệ nếu cần:
+        if (data === event.currentQrCode) {
+            // gọi API điểm danh, cập nhật state, thông báo thành công,...
+            Alert.alert('Thông báo', 'Điểm danh thành công!');
+            setIsCheckedIn(true);
+        } else {
+            Alert.alert('Thông báo', 'Mã QR không hợp lệ!');
+        }
+    };
+
+    useEffect(() => {
+        const uid = auth.currentUser?.uid;
+        if (!uid || !survey?.questions) return;   // chờ survey có câu hỏi đã
+
+        const resultRef = ref(
+            database,
+            `Events/${userId}/${eventId}/survey/answers/${uid}`,
+        );
+
+        const handler = (snap: any) => {
+            if (!snap.exists()) return;
+
+            const answersIdx = snap.val();          // {0:"B",1:5}
+            setAnswered(true);
+
+            setSelected(
+                normalizeAnswers(answersIdx, survey.questions)   // 🔄 map về {qid: value}
+            );
+        };
+
+        onValue(resultRef, handler);
+        return () => off(resultRef, 'value', handler);
+    }, [userId, eventId, survey?.questions]);
+
+    /* ---------- hàm submit ---------- */
+    const handleSubmitSurvey = async () => {
+        if (answered) return;
+        try {
+            // kiểm tra đủ câu trả lời
+            const unanswered = Object.keys(survey.questions).filter(
+                (qid) => selected[qid] === undefined,
+            );
+            if (unanswered.length) {
+                return Alert.alert('Thông báo', 'Bạn chưa trả lời hết câu hỏi!');
+            }
+
+            setSending(true);
+
+            const uid = auth.currentUser?.uid;
+            if (!uid) throw new Error('Chưa đăng nhập');
+
+            /* ---- Chuẩn hoá payload ghi lên Firebase ---- */
+            const answerPayload: Record<string, boolean> = {};
+            Object.entries(survey.questions).forEach(([qid, q]) => {
+                if ((q as Question).type === 'option') {
+                    const letter = selected[qid];                 // 'A' | 'B' | ...
+                    answerPayload[`${qid}/answers/${letter}/userChooseIds/${uid}`] = true;
+                } else if ((q as Question).type === 'number') {
+                    answerPayload[`${qid}/answer`] = selected[qid]; // số
+                } else if ((q as Question).type === 'level') {
+                    const lvl = selected[qid];                     // 1‑5
+                    answerPayload[`${qid}/answer/${lvl}/userChooseIds/${uid}`] = true;
+                }
+            });
+
+            const refPath = `Events/${userId}/${eventId}/survey/answers`; // folder gom kết quả
+            await set(ref(database, refPath + '/' + uid), selected);      // lưu bản đầy đủ
+            await update(ref(database, `Events/${userId}/${eventId}/survey/questions`), answerPayload);
+
+            setAnswered(true);
+            Alert.alert('Thông báo', 'Cảm ơn bạn đã hoàn thành khảo sát!');
+        } catch (err) {
+            console.error(err);
+            Alert.alert('Gửi khảo sát thất bại!');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const renderQuestion = ([qid, q]: [string, Question], idx: number) => {
+        if (q.type === 'option') {
+            const current = selected[qid];
+            return (
+                <ImageBackground
+                    key={qid}
+                    source={require('../images/image_note.jpg')} // hoặc ảnh khác theo loại câu hỏi
+                    style={styles.qBlock}
+                    imageStyle={{ borderRadius: 8 }}
+                >
+                    <Text style={styles.qContent}>{`${idx + 1}. ${q.content}`}</Text>
+                    {(['A', 'B', 'C', 'D'] as const).map(letter => (
+                        <Pressable
+                            key={letter}
+                            disabled={answered}
+                            style={[styles.optRow, current === letter && styles.optRowActive, answered && { opacity: 0.5 }]}
+                            onPress={() => setAnswer(qid, letter)}
+                        >
+                            <Text style={styles.optLetter}>{letter}.</Text>
+                            <View style={styles.optBox}><Text>{q.answers[letter].content}</Text></View>
+                        </Pressable>
+                    ))}
+                </ImageBackground>
+            );
+        }
+
+        if (q.type === 'number') {
+            return <NumberQuestion key={qid} qid={qid} q={q} idx={idx} saved={selected[qid]} onSave={setAnswer} disabled={answered} />;
+        }
+
+        if (q.type === 'level') {
+            const current = (selected[qid] ?? 3) as 1 | 2 | 3 | 4 | 5;
+            return (
+                <ImageBackground
+                    key={qid}
+                    source={require('../images/image_note.jpg')} // hoặc ảnh khác theo loại câu hỏi
+                    style={styles.qBlock}
+                    imageStyle={{ borderRadius: 8 }}
+                >
+                    <Text style={[styles.qContent, { fontWeight: 'bold' }]}>{`${idx + 1}. ${q.content}`}</Text>
+                    <Text style={[styles.levelDesc, { color: levelColors[current - 1] }]}>{levelMap[current]}</Text>
+                    <View style={styles.levelEmojis}>
+                        {[1, 2, 3, 4, 5].map(num => (
+                            <Pressable key={num} disabled={answered} onPress={() => setAnswer(qid, num)}>
+                                <Text style={num === current ? styles.activeEmoji : styles.emojiText}>{['😞', '🙂', '😊', '😁', '😍'][num - 1]}</Text>
+                            </Pressable>
+                        ))}
+                    </View>
+                </ImageBackground>
+            );
+        }
+        return null;
+    };
 
     useEffect(() => {
         const refPath = ref(database, `Events/${userId}/${eventId}`);
@@ -67,6 +306,15 @@ const EventDetail: React.FC = () => {
         };
         onValue(refPath, handler);
         return () => off(refPath, 'value', handler);
+    }, [userId, eventId]);
+
+    useEffect(() => {
+        const surveyRef = ref(database, `Events/${userId}/${eventId}/survey`);
+        const handler = (snap: any) => {
+            setSurvey(snap.exists() ? snap.val() : null);
+        };
+        onValue(surveyRef, handler);
+        return () => off(surveyRef, 'value', handler);
     }, [userId, eventId]);
 
     useEffect(() => {
@@ -162,6 +410,9 @@ const EventDetail: React.FC = () => {
         }).start();
     };
 
+    const isExpired = dayjs().isAfter(dayjs(finishAt, FORMAT));
+    const disableSubmit = sending || isExpired;
+
     if (loading) {
         return (
             <View style={styles.center}>
@@ -181,7 +432,7 @@ const EventDetail: React.FC = () => {
     return (
         <>
             <ScrollView >
-                <HeaderBack namePage='Chi tiết sự kiện'/>
+                <HeaderBack namePage='Chi tiết sự kiện' />
                 <View style={styles.container}>
                     {imageEvents.length > 0 && (
                         <>
@@ -260,7 +511,7 @@ const EventDetail: React.FC = () => {
                             <Text style={activeTab === 'intro' ? styles.tabActive : styles.tabTxt}>Giới thiệu</Text>
                         </Pressable>
                         <Pressable style={styles.tabBtnWrap} onPress={() => switchTab('other', 1)}>
-                            <Text style={activeTab === 'other' ? styles.tabActive : styles.tabTxt}>Thông tin khác</Text>
+                            <Text style={activeTab === 'other' ? styles.tabActive : styles.tabTxt}>Hoạt động</Text>
                         </Pressable>
                     </View>
 
@@ -325,10 +576,10 @@ const EventDetail: React.FC = () => {
                                             {/* Điểm danh */}
                                             <TouchableOpacity
                                                 disabled={status !== 1 || isCheckedIn}
-                                                onPress={() => console.log('Điểm danh')}
+                                                onPress={openScanner}
                                                 style={[
                                                     styles.buttonMark,
-                                                    (status !== 1 || isCheckedIn) && { backgroundColor: '#ccc' }
+                                                    (status !== 1 || isCheckedIn) && { backgroundColor: '#ccc' },
                                                 ]}
                                             >
                                                 <Text style={styles.buttonText}>Điểm danh</Text>
@@ -347,9 +598,45 @@ const EventDetail: React.FC = () => {
                                 <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#000', marginBottom: 10, marginTop: 2 }}>
                                     Khảo sát sự kiện
                                 </Text>
-                                <View style={styles.eventSurveyBox}>
-                                    <Text style={{ color: '#555' }}>Chưa có khảo sát nào được gắn với sự kiện này.</Text>
-                                </View>
+                                {survey ? (
+                                    <ScrollView
+                                        style={{ paddingHorizontal: 20, backgroundColor: '#ffffd8' }}
+                                        contentContainerStyle={{ paddingVertical: 12 }}
+                                        showsVerticalScrollIndicator={false}
+                                    >
+                                        {Object.entries(survey.questions as Record<string, Question>)
+                                            .map(([qid, q], i) => renderQuestion([qid, q], i))}
+
+                                        {!answered && !isExpired && (                  // ẩn luôn nếu đã hết giờ
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.submitBtn,
+                                                    disableSubmit && styles.submitDisabled,
+                                                ]}
+                                                onPress={handleSubmitSurvey}
+                                                disabled={disableSubmit}                  // khóa khi đang gửi
+                                            >
+                                                {sending ? (
+                                                    <ActivityIndicator size="small" color="#fff" />
+                                                ) : (
+                                                    <Text style={styles.submitTxt}>Hoàn thành</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
+
+                                        {/* Thông báo khi sự kiện đã kết thúc nhưng user chưa gửi */}
+                                        {!answered && isExpired && (
+                                            <Text style={{ textAlign: 'center', color: '#f00', marginTop: 12 }}>
+                                                Sự kiện đã kết thúc – bạn không thể gửi khảo sát.
+                                            </Text>
+                                        )}
+
+                                    </ScrollView>
+                                ) : (
+                                    <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                                        <Text style={{ marginTop: 4 }}>Hiện chưa có khảo sát</Text>
+                                    </View>
+                                )}
                             </View>
                         </>
                     )}
@@ -361,6 +648,72 @@ const EventDetail: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+    scannerBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    scannerBox: {
+        backgroundColor: '#fff',
+        padding: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    scannerTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 16,
+    },
+    closeBtn: {
+        marginTop: 16,
+        backgroundColor: '#333',
+        paddingVertical: 8,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+    },
+    submitBtn: {
+        alignSelf: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 28,
+        backgroundColor: '#1890ff',
+        borderRadius: 8,
+    },
+    submitTxt: {
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 16,
+    },
+    submitDisabled: { backgroundColor: '#ccc' },
+    levelDesc: { textAlign: 'center', marginBottom: 4, fontWeight: '500' },
+    levelEmojis: { flexDirection: 'row', justifyContent: 'space-around' },
+    emojiText: { fontSize: 28, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
+    activeEmoji: { fontSize: 34, textShadowColor: '#2ecc71', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10, },
+    optLetter: { fontWeight: '700', marginRight: 6 },
+    optBox: { flex: 1 },
+    optRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, padding: 6, borderRadius: 6 },
+    optRowActive: { backgroundColor: '#e1f5fe' },
+    numLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+    valueText: { fontWeight: '700', fontSize: 16 },
+    qBlock: { backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 20, elevation: 7, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 6, borderColor: '#ccc', borderWidth: 1 },
+    surveyBox: {
+        backgroundColor: '#fff',
+        padding: 15,
+        borderRadius: 10,
+    },
+    surveyMeta: { fontSize: 14, color: '#555', marginBottom: 8 },
+    questionCard: {
+        marginBottom: 12,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#eee',
+        borderRadius: 8,
+        backgroundColor: '#fafafa',
+    },
+    qContent: { fontSize: 15, fontWeight: '600', color: '#222', marginBottom: 6 },
+    optLine: { fontSize: 14, color: '#444' },
+    optResult: { color: '#888' },
+    notFound: { fontSize: 14, color: '#777' },
     buttonText: {
         color: '#fff',
         fontWeight: 'bold',
@@ -469,25 +822,27 @@ const styles = StyleSheet.create({
         borderRadius: 30,
         overflow: 'hidden',
         backgroundColor: '#fff',
-        marginBottom: 10
+        marginBottom: 10,
+        alignItems: 'center',
     },
     indicator: {
         position: 'absolute',
+        left: 0,
+        right: 0,
         width: TAB_WIDTH,
         height: '100%',
         backgroundColor: '#3498db',
         borderRadius: 30,
+        alignItems: 'center',
         elevation: 3,
     },
     tabBtnWrap: {
         width: TAB_WIDTH,
         paddingVertical: 12,
-        flexDirection: 'row',
         justifyContent: 'center',
-        alignItems: 'center',
     },
-    tabTxt: { color: '#555', fontWeight: '600' },
-    tabActive: { color: '#fff', fontWeight: '700' },
+    tabTxt: { color: '#555', fontWeight: '600', textAlign: 'center', width: '100%' },
+    tabActive: { color: '#fff', fontWeight: '700', textAlign: 'center' },
 
     container: { flex: 1, backgroundColor: '#f1f1f1', padding: 16 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },

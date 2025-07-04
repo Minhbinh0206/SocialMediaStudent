@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     maxHeight: '85%',
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffd8',
     borderRadius: 20,
     overflow: 'hidden',
 
@@ -427,8 +427,9 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 4
   },
+  
   headerColumn: {
-    backgroundColor: '#ffffd8',
+    backgroundColor: '#fff',
     flexDirection: 'column',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -440,7 +441,7 @@ const styles = StyleSheet.create({
 
   /* Footer */
   footer: {
-    backgroundColor: '#ffffd8',
+    backgroundColor: '#fff',
     borderTopWidth: 1,
     borderColor: '#eee',
     padding: 12,

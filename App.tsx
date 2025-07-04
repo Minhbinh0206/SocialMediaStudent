@@ -25,6 +25,7 @@ import NotifyDetailScreen from './pages/NotifyDetailScreen';
 import FriendScreen from './pages/FriendScreen';
 import EventDetail from './pages/EventDetail';
 import ListEventStatus from './pages/ListEventStatus';
+import ScannerScreen from './pages/ScannerScreen';
 
 const Stack = createStackNavigator();
 
@@ -38,17 +39,18 @@ function App(): React.JSX.Element {
         <Stack.Screen name="Home" component={Home} options={{ headerShown: false }} />
         <Stack.Screen name="UploadProfile" component={UploadProfile} options={{ headerShown: false }} />
         <Stack.Screen name="SearchFriend" component={SearchFriend} options={{ headerShown: false }} />
-        <Stack.Screen name="FriendScreen" component={FriendScreen} options={{ headerShown: false}}/>
+        <Stack.Screen name="FriendScreen" component={FriendScreen} options={{ headerShown: false }} />
         <Stack.Screen name="CommentScreen" component={CommentScreen} options={{ headerShown: false }} />
         <Stack.Screen name="NotifyDetailScreen" component={NotifyDetailScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Message" component={Message} options={{ headerShown: false }} />
         <Stack.Screen name="MessageDetail" component={MessageDetail} options={{ headerShown: false }} />
         <Stack.Screen name="GroupDetail" component={GroupDetail} options={{ headerShown: false }} />
         <Stack.Screen name="GroupDetailNotJoin" component={GroupDetailNotJoin} options={{ headerShown: false }} />
-        <Stack.Screen name="GroupDetailJoined" component={GroupDetailJoined}  options={{ headerShown: false }}/>
+        <Stack.Screen name="GroupDetailJoined" component={GroupDetailJoined} options={{ headerShown: false }} />
         <Stack.Screen name="CreateGroup" component={CreateGroup} options={{ headerShown: false }} />
         <Stack.Screen name="EventDetail" component={EventDetail} options={{ headerShown: false }} />
         <Stack.Screen name="ListEventStatus" component={ListEventStatus} options={{ headerShown: false }} />
+        <Stack.Screen name="ScannerScreen" component={ScannerScreen} options={{ headerShown: false }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
