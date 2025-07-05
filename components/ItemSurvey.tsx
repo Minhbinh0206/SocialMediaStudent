@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
   },
   
   headerColumn: {
-    backgroundColor: '#fff',
+    backgroundColor: '#e1f8f9',
     flexDirection: 'column',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
 
   /* Footer */
   footer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#e1f8f9',
     borderTopWidth: 1,
     borderColor: '#eee',
     padding: 12,

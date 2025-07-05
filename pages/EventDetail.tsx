@@ -15,6 +15,8 @@ import {
     ImageBackground,
     Alert,
     Modal,
+    Platform,
+    Linking,
 } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { database } from '../firebaseConfig';
@@ -26,7 +28,10 @@ import { Question, QuestionNumber } from '../components/ItemSurvey';
 import Slider from '@react-native-community/slider';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-
+import QRScanner from './QRScanner';
+const makeZxingIntent = (callback: string) =>
+    `intent://scan/?ret=${encodeURIComponent(callback)}&SCAN_FORMATS=QR_CODE`
+    + '#Intent;scheme=zxing;package=com.google.zxing.client.android;end';
 dayjs.extend(customParseFormat);
 const FORMAT = 'HH:mm:ss DD/MM/YYYY';
 interface NumProps { qid: string; q: QuestionNumber; idx: number; saved: number | undefined; onSave: (id: string, v: number) => void; disabled: boolean; }
@@ -86,6 +91,11 @@ const NumberQuestion: React.FC<NumProps> = memo(
     (p, n) => p.saved === n.saved && p.disabled === n.disabled,
 );
 
+const generateQrCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+};
+
 const levelMap = { 1: 'Rất tệ', 2: 'Không thích', 3: 'Bình thường', 4: 'Thích', 5: 'Rất thích' } as const;
 const levelColors = ['#e74c3c', '#e67e22', '#f1c40f', '#27ae60', '#2ecc71'];
 
@@ -130,15 +140,69 @@ const EventDetail: React.FC = () => {
     const [selected, setSelected] = useState<Record<string, any>>({});
     const [answered, setAnswered] = useState(false);         // ✅ đã khảo sát?
     const [isScannerVisible, setScannerVisible] = useState(false);
+    const [showCam, setShowCam] = useState(false);
+    const openScanner = () => setShowCam(true);
+    const closeScanner = () => setShowCam(false);
 
-    const openScanner = () => setScannerVisible(true);
+    useEffect(() => {
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
 
-    const onScanSuccess = (e: any) => {
-        const data = e.data;
-        console.log("QR scanned:", data);
-        setScannerVisible(false);
-        // TODO: xử lý dữ liệu QR (check-in hoặc gọi API tại đây)
+        const checkInRef = ref(
+            database,
+            `Events/${userId}/${eventId}/checkIn/${uid}`,
+        );
+
+        const handler = (snap: any) => setIsCheckedIn(snap.exists());
+
+        onValue(checkInRef, handler);   // lắng nghe realtime: nếu admin xoá check‑in, UI cũng cập nhật
+        return () => off(checkInRef, 'value', handler);
+    }, [userId, eventId]);
+
+    const onScanned = async (data: string) => {
+        if (data !== event.currentQrCode) {
+            Alert.alert('Thông báo', 'Mã QR không hợp lệ hoặc đã được sử dụng!');
+            return;
+        }
+
+        try {
+            const uid = auth.currentUser?.uid;
+            if (!uid || !student) throw new Error('Chưa đăng nhập hoặc thiếu hồ sơ');
+
+            /* 1. Lưu điểm danh */
+            const payload = {
+                mssv: student.studentNumber,
+                name: student.studentName,
+                class: student.className,
+                department: student.departmentName,
+                code: data,
+                checkedAt: Date.now(),              // tuỳ chọn: lưu thời gian
+            };
+            await set(
+                ref(database, `Events/${userId}/${eventId}/checkIn/${uid}`),
+                payload,
+            );
+
+            /* 2. Tạo và ghi mã QR mới */
+            const newCode = generateQrCode();       // ← gọi hàm để lấy chuỗi
+            await set(                               // ghi thẳng vào currentQrCode
+                ref(database, `Events/${userId}/${eventId}/currentQrCode`),
+                newCode,
+            );
+
+            Alert.alert('Thông báo', 'Điểm danh thành công!');
+            setIsCheckedIn(true);
+        } catch (err) {
+            console.error(err);
+            Alert.alert('Lỗi', 'Không thể ghi điểm danh, vui lòng thử lại!');
+        }
     };
+
+    const handleQr = (data: string) => {
+        closeScanner();
+        onScanned(data);
+    };
+
 
     const setAnswer = (qid: string, value: any) => {
         if (answered) return;
@@ -159,20 +223,6 @@ const EventDetail: React.FC = () => {
         });
 
         return result;
-    };
-
-    /* ---------- khi quét thành công ---------- */
-    const onScanned = (data: string) => {
-        console.log('QR Code:', data);
-
-        // ⚠️ So sánh với mã hợp lệ nếu cần:
-        if (data === event.currentQrCode) {
-            // gọi API điểm danh, cập nhật state, thông báo thành công,...
-            Alert.alert('Thông báo', 'Điểm danh thành công!');
-            setIsCheckedIn(true);
-        } else {
-            Alert.alert('Thông báo', 'Mã QR không hợp lệ!');
-        }
     };
 
     useEffect(() => {
@@ -199,7 +249,6 @@ const EventDetail: React.FC = () => {
         return () => off(resultRef, 'value', handler);
     }, [userId, eventId, survey?.questions]);
 
-    /* ---------- hàm submit ---------- */
     const handleSubmitSurvey = async () => {
         if (answered) return;
         try {
@@ -642,6 +691,11 @@ const EventDetail: React.FC = () => {
                     )}
 
                 </View>
+                {showCam && (
+                    <Modal visible onRequestClose={closeScanner}>
+                        <QRScanner onResult={handleQr} onClose={closeScanner} />
+                    </Modal>
+                )}
             </ScrollView >
         </>
     );
