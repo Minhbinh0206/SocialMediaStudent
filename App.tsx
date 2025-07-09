@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -26,11 +26,20 @@ import FriendScreen from './pages/FriendScreen';
 import EventDetail from './pages/EventDetail';
 import ListEventStatus from './pages/ListEventStatus';
 import ScannerScreen from './pages/ScannerScreen';
+import { saveFcmToken, setupForegroundListener } from './components/PushNotificationService';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { RootStackParamList } from './type';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 // App Component
 function App(): React.JSX.Element {
+
+  useEffect(() => {
+    saveFcmToken();
+    setupForegroundListener();
+  }, []);
+
   return (
     <NavigationContainer>
       <Stack.Navigator>
@@ -50,7 +59,7 @@ function App(): React.JSX.Element {
         <Stack.Screen name="CreateGroup" component={CreateGroup} options={{ headerShown: false }} />
         <Stack.Screen name="EventDetail" component={EventDetail} options={{ headerShown: false }} />
         <Stack.Screen name="ListEventStatus" component={ListEventStatus} options={{ headerShown: false }} />
-        <Stack.Screen name="ScannerScreen" component={ScannerScreen} options={{ headerShown: false }}/>
+        <Stack.Screen name="ScannerScreen" component={ScannerScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

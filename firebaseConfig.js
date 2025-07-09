@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getMessaging } from '@react-native-firebase/messaging';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCrmDM-bRdXKE8nEyrtzGFgPRQzMkvmrwI",

@@ -8,7 +8,7 @@ import { RootStackParamList } from '../type';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FriendScreen'>;
 
-const FriendScreen: React.FC<Props> = ({ route }) => {
+const FriendScreen: React.FC<Props> = ({ route, navigation }) => {
     // Lấy userId từ tham số của route
     const { userId } = route.params;
 

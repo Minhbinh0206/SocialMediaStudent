@@ -18,4 +18,5 @@ export type RootStackParamList = {
   CreateGroup: undefined;
   EventDetail: { userId: string; eventId: string };
   ListEventStatus: undefined;
+  ScannerScreen: undefined;
 };

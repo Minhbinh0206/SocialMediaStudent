@@ -4,6 +4,10 @@ import { useNavigation } from '@react-navigation/native';
 import database from '@react-native-firebase/database';
 import { getAuth } from 'firebase/auth';
 import ListPost from './ListPost';
+import { auth } from '../firebaseConfig';
+import { requestPush } from './PushNotificationService';
+import { getDatabase, ref, set } from 'firebase/database';
+import messaging from '@react-native-firebase/messaging';
 
 interface FriendProfileProps {
     userId: string;
@@ -122,40 +126,71 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
     }, [currentUserId]);
 
     const handleFollowFriend = async () => {
-        if (userId && currentUserId) {
-            const [mySnap, yourSnap] = await Promise.all([
-                database().ref(`Friends/${currentUserId}/${userId}`).once('value'),
-                database().ref(`Friends/${userId}/${currentUserId}`).once('value'),
-            ]);
+        if (!userId || !currentUserId) return;
 
-            const myStatus = mySnap.val()?.status ?? 0;
+        const myRef = database().ref(`Friends/${currentUserId}/${userId}`);
+        const yourRef = database().ref(`Friends/${userId}/${currentUserId}`);
 
-            if (myStatus === 0) {
-                await database().ref().update({
-                    [`Friends/${currentUserId}/${userId}/status`]: 1,
-                    [`Friends/${userId}/${currentUserId}/status`]: 2,
-                });
-                setTextStatusFriend('Đang theo dõi');
-                setButtonColor('#CCCCCC');
-            } else if (myStatus === 1) {
-                await database().ref().update({
-                    [`Friends/${currentUserId}/${userId}/status`]: 0,
-                    [`Friends/${userId}/${currentUserId}/status`]: 0,
-                });
-                setTextStatusFriend('Theo dõi');
-                setButtonColor('#007bff');
-            } else if (myStatus === 2) {
-                await database().ref().update({
-                    [`Friends/${currentUserId}/${userId}/status`]: 3,
-                    [`Friends/${userId}/${currentUserId}/status`]: 3,
-                });
-                setTextStatusFriend('Bạn bè');
-                setButtonColor('#00CC00');
-            } else if (myStatus === 3) {
-                console.log('Đã là bạn bè');
-            }
+        const [mySnap, yourSnap] = await Promise.all([
+            myRef.once('value'),
+            yourRef.once('value'),
+        ]);
+
+        const myStatus = mySnap.val()?.status ?? 0;
+
+        // ========== 1. Gửi lời mời kết bạn ==========
+        if (myStatus === 0) {
+            await database().ref().update({
+                [`Friends/${currentUserId}/${userId}/status`]: 1,
+                [`Friends/${userId}/${currentUserId}/status`]: 2,
+            });
+
+            setTextStatusFriend('Đang theo dõi');
+            setButtonColor('#CCCCCC');
+
+            await requestPush(
+                userId,
+                'Lời mời kết bạn',
+                `${userData?.studentName || 'Một người dùng'} muốn kết bạn với bạn`,
+                { fromUserId: currentUserId }
+            );
+        }
+
+        // ========== 2. Hủy lời mời ==========
+        else if (myStatus === 1) {
+            await database().ref().update({
+                [`Friends/${currentUserId}/${userId}/status`]: 0,
+                [`Friends/${userId}/${currentUserId}/status`]: 0,
+            });
+
+            setTextStatusFriend('Theo dõi');
+            setButtonColor('#007bff');
+        }
+
+        // ========== 3. Đồng ý kết bạn ==========
+        else if (myStatus === 2) {
+            await database().ref().update({
+                [`Friends/${currentUserId}/${userId}/status`]: 3,
+                [`Friends/${userId}/${currentUserId}/status`]: 3,
+            });
+
+            setTextStatusFriend('Bạn bè');
+            setButtonColor('#00CC00');
+
+            await requestPush(
+                userId,
+                'Kết bạn thành công',
+                `${userData?.studentName || 'Một người dùng'} đã chấp nhận kết bạn với bạn`,
+                { fromUserId: currentUserId }
+            );
+        }
+
+        // ========== 4. Đã là bạn bè ==========
+        else if (myStatus === 3) {
+            console.log('Đã là bạn bè');
         }
     };
+
 
     useEffect(() => {
         if (!userData) return;
@@ -229,6 +264,7 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
         major: require('../icons/icon_major.png'),
         course: require('../icons/icon_course.png'),
     };
+
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
