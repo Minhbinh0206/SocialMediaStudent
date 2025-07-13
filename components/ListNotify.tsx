@@ -190,7 +190,7 @@ const ListNotify = () => {
     });
 
     return (
-        <View style={{ flex: 1, height: '100%'}}>
+        <View style={{ flex: 1, height: '100%' }}>
             <ScrollView ref={scrollRef} style={styles.container}>
                 <View style={styles.pinnedWrapper}>
                     <View style={styles.pinnedItem}>
@@ -270,64 +270,24 @@ const ListNotify = () => {
                     )}
                 </View>
 
-                <View>
-                    <View style={styles.radioContainer}>
-                        {[
-                            { label: 'Tất cả', value: 'all' },
-                            { label: 'Trường', value: 'school' },
-                            { label: 'Khoa', value: 'department' },
-                            { label: 'Doanh nghiệp', value: 'bussiness' }
-                        ].map((item) => (
-                            <TouchableOpacity
-                                key={item.value}
-                                style={styles.radioItem}
-                                onPress={() => setSelectedFilter(item.value as typeof selectedFilter)}
-                            >
-                                <View style={styles.radioCircle}>
-                                    {selectedFilter === item.value && <View style={styles.radioDot} />}
-                                </View>
-                                <Text style={styles.radioLabel}>{item.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    <View style={{ marginVertical: 10, paddingHorizontal: 10, marginBottom: 20 }}>
-                        <Text style={{ fontWeight: 'bold', marginBottom: 6 }}>Chọn người gửi:</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.selectOption,
-                                    selectedAdminId === 'all' && styles.selectedOption,
-                                ]}
-                                onPress={() => setSelectedAdminId('all')}
-                            >
-                                <Text style={[
-                                    styles.selectOptionText,
-                                    selectedAdminId === 'all' && styles.selectedOptionText,
-                                ]}>
-                                    Tất cả thông báo
-                                </Text>
-                            </TouchableOpacity>
-
-
-                            {selectedFilter !== 'all' && filteredAdmins.map((admin) => (
-                                <TouchableOpacity
-                                    key={admin.adminId}
-                                    style={[
-                                        styles.selectOption,
-                                        selectedAdminId === admin.adminId && styles.selectedOption,
-                                    ]}
-                                    onPress={() => setSelectedAdminId(admin.adminId)}
-                                >
-                                    <Text style={[
-                                        styles.selectOptionText,
-                                        selectedAdminId === admin.adminId && styles.selectedOptionText,
-                                    ]}>{admin.fullName}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-
+                <View style={styles.radioContainer}>
+                    {[
+                        { label: 'Tất cả', value: 'all' },
+                        { label: 'Trường', value: 'school' },
+                        { label: 'Khoa', value: 'department' },
+                        { label: 'Doanh nghiệp', value: 'bussiness' }
+                    ].map((item) => (
+                        <TouchableOpacity
+                            key={item.value}
+                            style={styles.radioItem}
+                            onPress={() => setSelectedFilter(item.value as typeof selectedFilter)}
+                        >
+                            <View style={styles.radioCircle}>
+                                {selectedFilter === item.value && <View style={styles.radioDot} />}
+                            </View>
+                            <Text style={styles.radioLabel}>{item.label}</Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
 
                 {notifications.length > 0 ? (
@@ -503,6 +463,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-around',
         marginVertical: 10,
+        marginBottom: 20
     },
 
     radioItem: {

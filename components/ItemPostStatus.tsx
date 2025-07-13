@@ -163,7 +163,7 @@ const ItemPostStatus: React.FC<PostProps> = ({
 
     const findAdminOrStudentByUserId = async (userId: string) => {
         const db = getDatabase();
-        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
 
         for (const path of adminPaths) {
             const adminRef = ref(db, `Admins/${path}/${userId}`);

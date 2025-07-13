@@ -114,17 +114,6 @@ const Header: React.FC<HomeHeaderProps> = ({ title, pageName }) => {
       case 'notification': // Trang thoong báo
         return (
           <View style={styles.rightContainer}>
-            <TouchableOpacity>
-              <Image
-                source={require('../icons/icon_recent.png')}
-                style={styles.iconImage}
-              />
-              {messageCount > 0 && (
-                <View style={styles.badgeContainer}>
-                  <Text style={styles.badgeText}>{messageCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
             <Image source={getAvatar()} style={styles.avatar} />
           </View>
         );

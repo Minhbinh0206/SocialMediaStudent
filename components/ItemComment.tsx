@@ -25,7 +25,7 @@ interface CommentProps {
 
 interface ReplyProps {
     content: string;
-    createdAt: string;
+    createdAt: number;
     replyLike: {
         count: number;
         userIds: string[];
@@ -142,7 +142,7 @@ const ItemComment: React.FC<CommentProps> = ({
             console.error('Lỗi khi tìm student:', err);
         }
 
-        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
         try {
             for (let path of adminPaths) {
                 const snapshot = await get(child(ref(database), `Admins/${path}/${userCommentId}`));
@@ -206,7 +206,7 @@ const ItemComment: React.FC<CommentProps> = ({
                 const repliesList: ReplyProps[] = Object.values(repliesObject)
                     .map((item: any): ReplyProps => ({
                         content: item.content,
-                        createdAt: item.commentCreateAt,
+                        createdAt: item.createdAt,
                         replyLike: {
                             count: item.commentLike?.count || 0,
                             userIds: item.commentLike?.userIds || []

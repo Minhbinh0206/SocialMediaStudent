@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, FlatList, StyleSheet, LayoutAnimation, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
+import { View, FlatList, StyleSheet, LayoutAnimation, ActivityIndicator, TouchableOpacity, Image, ScrollView } from 'react-native';
 import Header from '../components/Header';
 import Navigation from '../components/Navigation';
-import { get, ref, onValue, off } from 'firebase/database';
+import { get, ref, onValue, off, onChildAdded } from 'firebase/database';
 import { database } from '../firebaseConfig';
 import { getAuth } from 'firebase/auth';
 
@@ -14,25 +14,20 @@ import ListEvent from '../components/ListEvent';
 import ItemPost from '../components/ItemPost';
 import ItemSurvey from '../components/ItemSurvey';
 import { Text } from 'react-native';
+import ListPost from '../components/ListPost';
+import ListSurvey from '../components/ListSurvey';
 
 const Home: React.FC = () => {
     const [title, setTitle] = useState('Trang chủ');
     const [pageName, setPageName] = useState('home');
 
     const [posts, setPosts] = useState<any[]>([]);
-    const [surveys, setSurveys] = useState<any[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
-    const [postsLoaded, setPostsLoaded] = useState(false);
-    const [surveysLoaded, setSurveysLoaded] = useState(false);
+    const [isSurveyMode, setIsSurveyMode] = useState<boolean>(false);
 
     const handleIconPress = (newTitle: string, newPage: string) => {
         setTitle(newTitle);
         setPageName(newPage);
-        if (newPage === 'home') {
-            setLoading(true);
-            setPostsLoaded(false);
-            setSurveysLoaded(false);
-        }
     };
 
     useEffect(() => {
@@ -46,9 +41,7 @@ const Home: React.FC = () => {
         }
 
         let unsubscribed = false;
-
         const postDefaultsRef = ref(database, 'PostDefaults');
-        const surveyRef = ref(database, 'Surveys');
 
         const fetchAndListen = async () => {
             try {
@@ -60,61 +53,40 @@ const Home: React.FC = () => {
                     return;
                 }
 
-                // Posts
-                onValue(postDefaultsRef, (snapshot) => {
+                // Clear posts on first load
+                setPosts([]);
+                const seenPosts = new Set(); // Ngăn post trùng
+
+                onChildAdded(postDefaultsRef, (snapshot) => {
                     if (unsubscribed) return;
-                    const data = snapshot.val();
-                    if (!data) {
-                        setPosts([]);
-                        setPostsLoaded(true);
-                        return;
-                    }
+                    const post = snapshot.val();
+                    const postId = snapshot.key;
 
-                    const loadedPosts = Object.entries(data)
-                        .map(([postId, post]: any) => {
-                            const filterData = post?.filterData;
-                            let shouldInclude = !filterData || filterData.includes(currentDepartmentId);
+                    if (seenPosts.has(postId)) return;
+                    seenPosts.add(postId);
 
-                            if (!shouldInclude) return null;
+                    const filterData = post?.filterData;
+                    const shouldInclude =
+                        !filterData || filterData[currentDepartmentId]; // object dạng { deptA: true }
 
-                            return {
-                                ...post,
-                                id: `post-${postId}`,
-                                type: 'post',
-                                createdAt: Number(post.createAt),
-                            };
-                        })
-                        .filter(Boolean);
+                    if (!shouldInclude) return;
 
-                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                    setPosts(loadedPosts);
+                    const newPost = {
+                        ...post,
+                        id: `post-${postId}`,
+                        type: 'post',
+                        createdAt: Number(post.createAt),
+                    };
 
+                    // 👉 Thêm vào đầu danh sách
+                    setPosts((prev) => [newPost, ...prev]);
                 });
 
-                // Surveys
-                onValue(surveyRef, (snapshot) => {
-                    if (unsubscribed) return;
-                    const data = snapshot.val();
-                    if (!data) {
-                        setSurveys([]);
-                        return;
-                    }
-
-                    const loadedSurveys = Object.entries(data).map(([id, survey]: any) => ({
-                        ...survey,
-                        id: `survey-${id}`,
-                        type: 'survey',
-                        createdAt: Number(survey.createdAt),
-                    }));
-                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                    setSurveys(loadedSurveys);
-                });
 
                 setLoading(false);
             } catch (err) {
                 console.error('Lỗi khi lấy dữ liệu:', err);
                 setPosts([]);
-                setSurveys([]);
                 setLoading(false);
             }
         };
@@ -123,88 +95,55 @@ const Home: React.FC = () => {
 
         return () => {
             unsubscribed = true;
-            off(postDefaultsRef);
-            off(surveyRef);
+            off(postDefaultsRef); // stop all listeners
         };
     }, [pageName]);
-
-    // Gộp posts + surveys
-    const feed = useMemo(() => {
-        return [...posts, ...surveys].sort((a, b) => b.createdAt - a.createdAt);
-    }, [posts, surveys]);
-
-    const renderFeedItem = ({ item }: { item: any }) => {
-        switch (item.type) {
-            case 'post':
-                return <ItemPost postId={item.postId} content={item.content} createAt={item.createAt} groupId={item.groupId} postImage={item.postImage} postLike={item.postLike} postMark={item.postMark} userPostId={item.userId} />;
-            case 'survey':
-                return <ItemSurvey survey={item} />;
-            default:
-                return null;
-        }
-    };
-
-    if (loading) {
-        return (
-            <View style={{ height: '100%', justifyContent: 'center' }}>
-                <ActivityIndicator size="large" color="#3498db" />
-            </View>
-        );
-    }
 
     return (
         <View style={{ position: 'relative', height: '100%', paddingBottom: 50 }}>
             <Header title={title} pageName={pageName} />
 
-            {pageName === 'home' ? (
-                loading ? (
-                    <ActivityIndicator size="large" color="#000" style={{ marginTop: 30 }} />
+            <View style={styles.listItem}>
+                {pageName === 'home' ? (
+                    <ScrollView>
+                        <ListEvent />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 }}>
+                            <Text style={styles.feedTitle}>Bảng tin</Text>
+                            <TouchableOpacity
+                                onPress={() => setIsSurveyMode(!isSurveyMode)}
+                                style={{
+                                    backgroundColor: '#fff',
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 5,
+                                    borderRadius: 100,
+                                }}
+                            >
+                                <Image
+                                    source={require('../icons/icon_swap.png')}
+                                    style={{ width: 20, height: 20 }}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                        {isSurveyMode ? (
+                            <ListSurvey />
+                        ) : (
+                            <ListPost posts={posts} />
+                        )}
+
+                    </ScrollView>
+                ) : pageName === 'friend' ? (
+                    <ListFriend />
+                ) : pageName === 'notification' ? (
+                    <ListNotify />
+                ) : pageName === 'profile' ? (
+                    <Profile />
                 ) : (
-                    <FlatList
-                        ListHeaderComponent={
-                            <>
-                                <ListEvent />
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 }}>
-                                    <Text style={styles.feedTitle}>Bảng tin</Text>
-                                    <TouchableOpacity
-                                        onPress={() => console.log('Filter Post and Notify')}
-                                        style={{
-                                            backgroundColor: '#fff',
-                                            paddingHorizontal: 10,
-                                            paddingVertical: 5,
-                                            borderRadius: 100
-                                        }}
-                                    >
-                                        <Image
-                                            source={require('../icons/icon_filter.png')}
-                                            style={{ width: 20, height: 20 }}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-                            </>
-                        }
-                        data={feed}
-                        keyExtractor={(item) => item.id}
-                        renderItem={renderFeedItem}
-                        contentContainerStyle={{ padding: 10 }}
-                    />
-                )
-            ) : (
-                <View style={styles.listItem}>
-                    {pageName === 'friend' ? (
-                        <ListFriend />
-                    ) : pageName === 'notification' ? (
-                        <ListNotify />
-                    ) : pageName === 'profile' ? (
-                        <Profile />
-                    ) : (
-                        <ListGroup />
-                    )}
-                </View>
-            )}
+                    <ListGroup />
+                )}
+            </View>
 
             <Navigation onIconPress={handleIconPress} />
-        </View>
+        </View >
     );
 };
 

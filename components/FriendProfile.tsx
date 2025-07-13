@@ -5,7 +5,6 @@ import database from '@react-native-firebase/database';
 import { getAuth } from 'firebase/auth';
 import ListPost from './ListPost';
 import { auth } from '../firebaseConfig';
-import { requestPush } from './PushNotificationService';
 import { getDatabase, ref, set } from 'firebase/database';
 import messaging from '@react-native-firebase/messaging';
 
@@ -147,13 +146,6 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
 
             setTextStatusFriend('Đang theo dõi');
             setButtonColor('#CCCCCC');
-
-            await requestPush(
-                userId,
-                'Lời mời kết bạn',
-                `${userData?.studentName || 'Một người dùng'} muốn kết bạn với bạn`,
-                { fromUserId: currentUserId }
-            );
         }
 
         // ========== 2. Hủy lời mời ==========
@@ -176,13 +168,6 @@ const FriendProfile = ({ userId }: FriendProfileProps) => {
 
             setTextStatusFriend('Bạn bè');
             setButtonColor('#00CC00');
-
-            await requestPush(
-                userId,
-                'Kết bạn thành công',
-                `${userData?.studentName || 'Một người dùng'} đã chấp nhận kết bạn với bạn`,
-                { fromUserId: currentUserId }
-            );
         }
 
         // ========== 4. Đã là bạn bè ==========

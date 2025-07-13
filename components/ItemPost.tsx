@@ -140,7 +140,7 @@ const ItemPost: React.FC<PostProps> = ({
 
     try {
       // B1: kiểm tra người đăng có phải admin không
-      const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+      const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
       let isAdmin = false;
 
       for (const path of adminPaths) {
@@ -154,7 +154,11 @@ const ItemPost: React.FC<PostProps> = ({
 
       // B2: đọc dữ liệu like hiện tại
       const snap = await get(ref(db, likePath));
-      const current = snap.val() || { count: 0, userIds: [] };
+      const data = snap.val() || {};
+      const current = {
+        count: data.count || 0,
+        userIds: Array.isArray(data.userIds) ? data.userIds : [],
+      };
 
       const newLiked = !liked;
       let userIds = [...current.userIds];
@@ -169,10 +173,9 @@ const ItemPost: React.FC<PostProps> = ({
 
       // B3: cập nhật like
       const updates: any = {};
-      updates[likePath] = newPostLike;
-
+      updates[likePath] = userIds.length > 0 ? newPostLike : null; // nếu không còn ai like thì xoá luôn
       if (isAdmin) {
-        updates[defaultPath] = newPostLike;
+        updates[defaultPath] = userIds.length > 0 ? newPostLike : null;
       }
 
       await update(ref(db), updates);
@@ -188,7 +191,7 @@ const ItemPost: React.FC<PostProps> = ({
 
     try {
       // B1: kiểm tra người đăng có phải admin không
-      const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+      const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
       let isAdmin = false;
 
       for (const path of adminPaths) {
@@ -200,9 +203,13 @@ const ItemPost: React.FC<PostProps> = ({
         }
       }
 
-      // B2: đọc dữ liệu like hiện tại
+      // B2: đọc dữ liệu hiện tại
       const snap = await get(ref(db, likePath));
-      const current = snap.val() || { count: 0, userIds: [] };
+      const data = snap.val() || {};
+      const current = {
+        count: data.count || 0,
+        userIds: Array.isArray(data.userIds) ? data.userIds : [],
+      };
 
       const newMark = !marked;
       let userIds = [...current.userIds];
@@ -215,17 +222,17 @@ const ItemPost: React.FC<PostProps> = ({
 
       const newPostMark = { count: userIds.length, userIds };
 
-      // B3: cập nhật like
+      // B3: cập nhật mark
       const updates: any = {};
-      updates[likePath] = newPostMark;
+      updates[likePath] = userIds.length > 0 ? newPostMark : null;
 
       if (isAdmin) {
-        updates[defaultPath] = newPostMark;
+        updates[defaultPath] = userIds.length > 0 ? newPostMark : null;
       }
 
       await update(ref(db), updates);
     } catch (err) {
-      console.error('Error updating like:', err);
+      console.error('Error updating mark:', err);
     }
   };
 
@@ -235,7 +242,7 @@ const ItemPost: React.FC<PostProps> = ({
 
   const findAdminOrStudentByUserId = async (userId: string) => {
     const db = getDatabase();
-    const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+    const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
 
     for (const path of adminPaths) {
       const adminRef = ref(db, `Admins/${path}/${userId}`);

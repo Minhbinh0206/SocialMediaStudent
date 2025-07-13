@@ -16,7 +16,7 @@ interface ReplyCommentProps {
     userCommentId: string;
     userReplyId: string;
     content: string;
-    createdAt: string;
+    createdAt: number;
     replyLike: {
         count: number;
         userIds: string[];
@@ -128,7 +128,7 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
             console.error('Lỗi khi tìm student:', err);
         }
 
-        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBusinesses'];
+        const adminPaths = ['AdminDefaults', 'AdminDepartments', 'AdminBussinesses'];
         try {
             for (let path of adminPaths) {
                 const snapshot = await get(child(ref(database), `Admins/${path}/${userReplyId}`));
@@ -144,8 +144,8 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
             console.log('Không tìm thấy userCommentId ở Students hoặc Admins:', userCommentId);
             setUserName('Không rõ');
             setUserAvatar('/default-avatar.png');
-        } catch (err) {
-            console.error('Lỗi khi tìm admin:', err);
+        } catch (e) {
+            console.error('Lỗi khi tìm admin:', e);
         } finally {
             setLoading(false);
         }
@@ -164,17 +164,20 @@ const ItemReply: React.FC<ReplyCommentProps> = ({
         share: require('../icons/icon_share.png'),
     };
 
-    const formatDate = (date: string) => {
-        if (!date || isNaN(Date.parse(date))) return 'Không xác định';
+    const formatDate = (timestamp: number) => {
+        console.log('timestamp', timestamp);
+        if (!timestamp || isNaN(timestamp)) return 'Thời gian không hợp lệ';
 
-        const now = new Date();
-        const commentDate = new Date(date);
-        const diff = Math.floor((now.getTime() - commentDate.getTime()) / 1000);
+        const now = Date.now();
+        const diffInSeconds = Math.floor((now - timestamp) / 1000);
+        const diffInMinutes = Math.floor(diffInSeconds / 60);
+        const diffInHours = Math.floor(diffInMinutes / 60);
+        const diffInDays = Math.floor(diffInHours / 24);
 
-        if (diff < 60) return 'Vừa xong';
-        if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-        return `${Math.floor(diff / 86400)} ngày trước`;
+        if (diffInMinutes < 1) return 'Vừa xong';
+        if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+        if (diffInHours < 24) return `${diffInHours} giờ trước`;
+        return `${diffInDays} ngày trước`;
     };
 
     return (

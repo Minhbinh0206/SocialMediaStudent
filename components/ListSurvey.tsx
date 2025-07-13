@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Animated } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Animated, ScrollView } from 'react-native';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
 import ItemSurvey, { Survey } from './ItemSurvey';
 
@@ -69,20 +69,16 @@ const ListSurvey: React.FC = () => {
   }
 
   return (
-    <FlatList
-      data={surveys}
-      keyExtractor={(item) => item.surveyId}
-      contentContainerStyle={styles.listContainer}
-      renderItem={({ item }) => <ItemSurvey survey={item} />}
-    />
+    <ScrollView>
+      {surveys.map((item) => (
+        <ItemSurvey key={item.surveyId} survey={item} />
+      ))}
+    </ScrollView>
   );
+
 };
 
 const styles = StyleSheet.create({
-  listContainer: {
-    padding: 16,
-    paddingBottom: 80,
-  },
   centered: {
     flex: 1,
     justifyContent: 'center',

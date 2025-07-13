@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getDatabase, ref as dbRef, push, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
@@ -36,6 +36,7 @@ const CreateGroup = () => {
   const [question, setQuestion] = useState(DEFAULT_QUESTIONS[0]);
   const [studentName, setStudentName] = useState('');
   const [studentAvatar, setStudentAvatar] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const auth = getAuth();
   const database = getDatabase();
@@ -86,6 +87,7 @@ const CreateGroup = () => {
 
   const handleCreateGroup = async () => {
     if (!groupName.trim()) return;
+    setLoading(true);
 
     const newGroupRef = push(dbRef(database, 'Groups'));
     const groupId = newGroupRef.key as string;
@@ -114,7 +116,7 @@ const CreateGroup = () => {
       .ref(`/Groups/${groupId}/members/${currentUserId}`)
       .set({ name: studentName, avatar: studentAvatar, role: 'Quản trị viên' });
 
-    navigation.navigate('GroupDetailJoined', { groupId });
+    navigation.replace('GroupDetailJoined', { groupId });
   };
 
   const today = new Date();
@@ -188,11 +190,44 @@ const CreateGroup = () => {
           <Text style={styles.createButtonText}>Tạo nhóm</Text>
         </TouchableOpacity>
       </View>
+
+      {loading && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={{ marginBottom: 10, fontSize: 16 }}>Đang tạo nhóm...</Text>
+            <View style={{ justifyContent: 'center' }}>
+              <ActivityIndicator size="large" color="#3498db" />
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+
+  modalContent: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 200, // bạn có thể điều chỉnh
+    elevation: 5,
+  },
+
   container: { flex: 1, backgroundColor: '#F0F2F5' },
   bannerImage: {
     width: '100%', height: 160, borderBottomLeftRadius: 12,

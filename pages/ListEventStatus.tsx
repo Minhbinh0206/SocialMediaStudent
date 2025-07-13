@@ -8,6 +8,7 @@ import {
     StyleSheet,
     TextInput,
     TouchableOpacity,
+    ScrollView,
 } from 'react-native';
 import { ref, onValue, off } from 'firebase/database';
 import { database } from '../firebaseConfig';
@@ -16,7 +17,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../type';
 import HeaderBack from '../components/HeaderBack';
-import { ScrollView } from 'react-native-gesture-handler';
 import { Image } from 'react-native';
 
 type EventType = {

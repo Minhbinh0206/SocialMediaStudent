@@ -35,11 +35,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 // App Component
 function App(): React.JSX.Element {
 
-  useEffect(() => {
-    saveFcmToken();
-    setupForegroundListener();
-  }, []);
-
   return (
     <NavigationContainer>
       <Stack.Navigator>

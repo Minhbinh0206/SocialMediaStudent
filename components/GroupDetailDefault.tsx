@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, TextInput } from 'react-native';
+import { View, Text, Image, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, TextInput, ScrollView } from 'react-native';
 import database from '@react-native-firebase/database';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import HeaderBack from './HeaderBack';
 import { getAuth } from 'firebase/auth';
 import GroupDetailNotJoin from './GroupDetailNotJoin';
 import ListPost from './ListPost';
-import { ScrollView } from 'react-native-gesture-handler';
 
 const GroupDetailDefault: React.FC = () => {
     const route = useRoute();

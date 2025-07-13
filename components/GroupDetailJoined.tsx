@@ -21,6 +21,14 @@ type Member = {
     role?: string;
 };
 
+type RequestType = {
+    id: string;
+    name: string;
+    avatar: string;
+    answer: string;
+};
+
+
 const DEFAULT_QUESTIONS = [
     'Mục đích của bạn khi tham gia nhóm là gì?',
     'Bạn có tuân thủ nội quy của nhóm không?',
@@ -41,7 +49,7 @@ const GroupDetailJoined: React.FC = () => {
     const [group, setGroup] = useState<any>(null);
     const [adminId, setAdminId] = useState<string | null>(null);
     const [members, setMembers] = useState<any[]>([]);
-    const [requests, setRequests] = useState<any[]>([]);
+    const [requests, setRequests] = useState<RequestType[]>([]);
     const [isJoined, setIsJoined] = useState(false);
     const [loading, setLoading] = useState(true);
     const [images, setImages] = useState<Asset[]>([]);
@@ -124,7 +132,6 @@ const GroupDetailJoined: React.FC = () => {
         return pickedUri !== currentUrl;
     };
 
-
     const handleSaveGroupInfo = async () => {
         let avatarUrl = group.avatar || '';
         let bannerUrl = group.banner || '';
@@ -184,13 +191,11 @@ const GroupDetailJoined: React.FC = () => {
         }
     };
 
-    // Danh sách lọc theo từ khoá
     const filteredMembers = useMemo(() => {
         if (!search.trim()) return members;
         const keyword = search.trim().toLowerCase();
         return members.filter(m => (m.name || '').toLowerCase().includes(keyword));
     }, [members, search]);
-
 
     useEffect(() => {
         if (!groupId) return;
@@ -253,6 +258,81 @@ const GroupDetailJoined: React.FC = () => {
         });
     }, [currentUserId]);
 
+    const listenToGroupMembers = (
+        groupId: string,
+        currentUserId: string,
+        onUpdate: (members: Member[], isJoined: boolean) => void
+    ): (() => void) => {
+        const memberRef = database().ref(`/Groups/${groupId}/members`);
+
+        const listener = memberRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            const members: Member[] = data
+                ? Object.entries(data).map(([id, m]: [string, any]) => ({
+                    id,
+                    name: m.name,
+                    avatar: m.avatar,
+                    role: m.role || m.position || 'Thành viên',
+                }))
+                : [];
+
+            const isJoined = !!data?.[currentUserId];
+            onUpdate(members, isJoined);
+        });
+
+        // Return unsubscribe function
+        return () => memberRef.off('value', listener);
+    };
+
+    const listenToGroupRequests = (
+        groupId: string,
+        onUpdate: (requests: RequestType[]) => void
+    ): (() => void) => {
+        const requestRef = database().ref(`/Groups/${groupId}/requests`);
+
+        const listener = requestRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            const requests: RequestType[] = data
+                ? Object.entries(data).map(([id, r]: [string, any]) => ({
+                    id,
+                    name: r.name || 'Ẩn danh',
+                    avatar: r.avatar || '',
+                    answer: r.answer || '',
+                }))
+                : [];
+
+            onUpdate(requests);
+        });
+
+        // Trả về hàm hủy lắng nghe
+        return () => requestRef.off('value', listener);
+    };
+
+    useEffect(() => {
+        if (!groupId) return;
+
+        const unsubscribe = listenToGroupRequests(groupId, (requests) => {
+            setRequests(requests);
+        });
+
+        return () => unsubscribe();
+    }, [groupId]);
+
+    useEffect(() => {
+        if (!groupId || !currentUserId) return;
+
+        const unsubscribe = listenToGroupMembers(
+            groupId,
+            currentUserId,
+            (newMembers, isJoinedFlag) => {
+                setMembers(newMembers);
+                setIsJoined(isJoinedFlag);
+            }
+        );
+
+        return () => unsubscribe(); // hủy listener khi unmount
+    }, [groupId, currentUserId]);
+
     const handleAccept = (id: string) => {
         console.log("Duyệt yêu cầu:", id);
 
@@ -276,7 +356,11 @@ const GroupDetailJoined: React.FC = () => {
 
             // Thêm vào danh sách members
             memberRef.set(newMemberData).then(() => {
-                setMembers(prev => [...prev, { id, ...newMemberData }]);
+                setMembers(prev => {
+                    const exists = prev.find(member => member.id === id);
+                    if (exists) return prev; // Đã có, không thêm nữa
+                    return [...prev, { id, ...newMemberData }];
+                });
 
                 // Xóa request sau khi duyệt
                 requestRef.remove().then(() => {
@@ -324,26 +408,40 @@ const GroupDetailJoined: React.FC = () => {
     };
 
     const handleJoinLeave = () => {
-        if (!groupId || isJoining) return;
+        if (!groupId || !currentUserId || isJoining) return;
+
         setIsJoining(true);
+
         const memberRef = database().ref(`/Groups/${groupId}/members/${currentUserId}`);
 
         if (isJoined) {
-            memberRef.remove().then(() => {
-                setIsJoined(false);
-                setMembers(prev => prev.filter(member => member.id !== currentUserId));
-            }).finally(() => setIsJoining(false));
+            memberRef
+                .remove()
+                .then(() => {
+                    setIsJoined(false);
+                    setMembers(prev => prev.filter(member => member.id !== currentUserId));
+                })
+                .catch(err => {
+                    console.error('❌ Lỗi khi rời nhóm:', err);
+                })
+                .finally(() => setIsJoining(false));
         } else {
             const newMember = {
                 name: studentName,
                 avatar: studentAvatar,
-                role: 'Thành viên'
+                role: 'Thành viên',
             };
 
-            memberRef.set(newMember).then(() => {
-                setIsJoined(true);
-                setMembers(prev => [...prev, { id: currentUserId, ...newMember }]);
-            }).finally(() => setIsJoining(false));
+            memberRef
+                .set(newMember)
+                .then(() => {
+                    setIsJoined(true);
+                    setMembers(prev => [...prev, { id: currentUserId, ...newMember }]);
+                })
+                .catch(err => {
+                    console.error('❌ Lỗi khi tham gia nhóm:', err);
+                })
+                .finally(() => setIsJoining(false));
         }
     };
 
@@ -366,17 +464,38 @@ const GroupDetailJoined: React.FC = () => {
         }
     };
 
+    const listenToRoleMember = (
+        groupId: string,
+        userId: string,
+        callback: (role: string) => void
+    ): (() => void) => {
+        const roleRef = database().ref(`/Groups/${groupId}/members/${userId}/role`);
+
+        const listener = roleRef.on('value', (snapshot) => {
+            const role = snapshot.val() || 'Thành viên';
+            callback(role); // cập nhật vai trò mới
+        });
+
+        return () => roleRef.off('value', listener);
+    };
+
+    useEffect(() => {
+        if (!groupId || !currentUserId) return;
+
+        const unsubscribe = listenToRoleMember(groupId, currentUserId, (role) => {
+            console.log('Vai trò mới:', role); // ✅ kiểm tra xem callback có chạy không
+            setMyRole(role);                   // ✅ cập nhật state
+        });
+
+        return () => unsubscribe();
+    }, [groupId, currentUserId]);
+
+
     const handleSetCollaborator = async (groupId: string, userId: string) => {
         try {
             await database()
                 .ref(`/Groups/${groupId}/members/${userId}/role`)
                 .set('Cộng tác viên');
-
-            // Nếu đổi vai trò cho chính mình → cập nhật lại UI
-            if (userId === currentUserId) {
-                const role = await fetchRoleMember(groupId, userId);
-                setMyRole(role); // Cập nhật lại UI
-            }
 
             closeMenu();
         } catch (error) {
@@ -390,12 +509,6 @@ const GroupDetailJoined: React.FC = () => {
                 .ref(`/Groups/${groupId}/members/${userId}/role`)
                 .set('Thành viên');
 
-            // Nếu đổi vai trò cho chính mình → cập nhật lại UI
-            if (userId === currentUserId) {
-                const role = await fetchRoleMember(groupId, userId);
-                setMyRole(role); // Cập nhật lại UI
-            }
-
             closeMenu();
         } catch (error) {
             console.error('Lỗi cập nhật vai trò:', error);
@@ -407,22 +520,6 @@ const GroupDetailJoined: React.FC = () => {
         closeMenu();
         const memberRef = dbRef(db, `Groups/${groupId}/members/${userId}`);
         remove(memberRef);
-    };
-
-    const fetchRoleMember = async (groupId: string, userId: string): Promise<string | null> => {
-        try {
-            const snapshot = await database()
-                .ref(`/Groups/${groupId}/members/${userId}/role`)
-                .once('value');
-
-            const role = snapshot.val();
-
-            // Nếu không có role thì fallback là 'Thành viên'
-            return role || 'Thành viên';
-        } catch (error) {
-            console.error('Lỗi khi fetch role member:', error);
-            return null;
-        }
     };
 
     useEffect(() => {
@@ -533,6 +630,12 @@ const GroupDetailJoined: React.FC = () => {
                 imageUrls.push(url);
             }
 
+            const memberSnap = await database()
+                .ref(`Groups/${group.groupId}/members/${userId}/role`)
+                .once('value');
+            const role = memberSnap.val(); 
+            const status = (role === 'Quản trị viên' || role === 'Cộng tác viên') ? 1 : 0;
+
             const postData = {
                 content: postContent,
                 createAt: Date.now(),
@@ -540,7 +643,7 @@ const GroupDetailJoined: React.FC = () => {
                 postId,
                 postImage: imageUrls,
                 postLike: 0,
-                status: userId === group.adminId ? 1 : 0,
+                status,
                 userId,
             };
 
@@ -565,12 +668,12 @@ const GroupDetailJoined: React.FC = () => {
 
     return (
         <ScrollView style={styles.wrapper} >
-            <HeaderBack namePage={group.groupName}/>
+            <HeaderBack namePage={group?.groupName || 'Nhóm'} />
 
             {/* Ảnh bìa */}
             <View style={styles.coverContainer}>
-                {group.banner && <Image source={{ uri: group.banner }} style={styles.coverImg} />}
-                {group.avatar && <Image source={{ uri: group.avatar }} style={styles.coverAvatar} />}
+                {group?.banner && <Image source={{ uri: group.banner }} style={styles.coverImg} />}
+                {group?.avatar && <Image source={{ uri: group.avatar }} style={styles.coverAvatar} />}
             </View>
 
             {/* Thông tin nhóm */}
@@ -951,7 +1054,55 @@ const GroupDetailJoined: React.FC = () => {
                         </>
                     ) : activeTab === 'members' ? (
                         <>
+                            <ScrollView style={{ maxHeight: 500 }}>
+                                {filteredMembers.length === 0 ? (
+                                    <Text style={styles.emptyText}>Không tìm thấy thành viên</Text>
+                                ) : (
+                                    filteredMembers.map((item) => (
+                                        <View key={item.id} style={styles.memberItem}>
+                                            <Image source={{ uri: item.avatar }} style={styles.memberAvatar} />
+                                            <View style={styles.memberInfo}>
+                                                <Text style={styles.memberText}>{item.name}</Text>
+                                                <Text style={styles.positionText}>{item.role || 'Không xác định'}</Text>
+                                            </View>
 
+                                            {item.id !== currentUserId && (
+                                                <TouchableOpacity
+                                                    ref={(ref) => (moreRefs.current[item.id] = ref)}
+                                                    onPress={() => {
+                                                        setSelectedMember(item);
+                                                        openMenu(item.id);
+                                                    }}
+                                                >
+                                                    <Image source={require('../icons/icon_more.png')} style={styles.searchIcon} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    ))
+                                )}
+                            </ScrollView>
+
+                            <Modal
+                                transparent
+                                visible={menuVisible}
+                                animationType="fade"
+                                onRequestClose={closeMenu}
+                            >
+                                <TouchableWithoutFeedback onPress={closeMenu}>
+                                    <View style={styles.backdrop} />
+                                </TouchableWithoutFeedback>
+
+                                {selectedMember && (
+                                    <View style={[styles.popup, { top: menuPos.y, left: menuPos.x }]}>
+                                        <TouchableOpacity
+                                            style={styles.popupItem}
+                                            onPress={() => handleViewProfile(selectedMember.id)}
+                                        >
+                                            <Text style={styles.popupText}>Xem thông tin</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </Modal>
                         </>
                     ) : (
                         <>
